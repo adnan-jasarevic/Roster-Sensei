@@ -37,7 +37,7 @@ for (const p of PAGES) {
             recover();
             await error.getByRole('button', { name: 'Try again' }).click();
             await expect(error).toBeHidden();
-            expect(api.requestsTo('GET', p.endpoint).length).toBeGreaterThanOrEqual(2);
+            await expect.poll(() => api.requestsTo('GET', p.endpoint).length).toBeGreaterThanOrEqual(2);
         });
 
         if (p.empty) {

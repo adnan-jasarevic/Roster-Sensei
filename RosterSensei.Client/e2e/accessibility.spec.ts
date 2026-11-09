@@ -11,15 +11,21 @@ const PAGES = [
     { path: '/calendar', heading: 'Calendar', signedIn: true },
     { path: '/matches', heading: 'Matches', signedIn: true },
     { path: '/statistics', heading: 'Statistics', signedIn: true },
+    { path: '/account', heading: 'Account', signedIn: true },
 ];
 
 function withData(api: MockApi) {
-    api.teams = [team(1, 'Tokyo Ronin', 'Captain', true, {
-        matches: [
-            finishedMatch(1, 'Kyoto Kitsune', 13, 9, '2026-10-20T18:00:00Z'),
-            finishedMatch(2, 'Osaka Oni', 7, 13, '2026-10-27T18:00:00Z'),
-        ],
-    })];
+    const withLineup = finishedMatch(1, 'Kyoto Kitsune', 13, 9, '2026-10-20T18:00:00Z');
+    withLineup.lineup = [
+        { userId: 'kenji', username: 'kenji', role: 'AWP', played: true },
+        { userId: 'mika', username: 'mika', role: null, played: false },
+    ];
+    const tokyo = team(1, 'Tokyo Ronin', 'Captain', true, {
+        matches: [withLineup, finishedMatch(2, 'Osaka Oni', 7, 13, '2026-10-27T18:00:00Z')],
+    });
+    tokyo.members[1].steamProfileUrl = 'https://steamcommunity.com/profiles/76561198000000001';
+    api.teams = [tokyo];
+    api.steamId = '76561198000000002';
 }
 
 async function open(page: Page, api: MockApi, path: string, signedIn: boolean, heading: string) {

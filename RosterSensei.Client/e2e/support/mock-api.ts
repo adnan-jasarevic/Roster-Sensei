@@ -1,5 +1,5 @@
 import type { Page, Request, Route } from '@playwright/test';
-import type { Match, Team, TeamDashboardData, TeamInvite, TeamMember, TeamStats } from '../../src/types';
+import type { LineupEntry, Match, SteamAccount, Team, TeamDashboardData, TeamInvite, TeamMember, TeamStats } from '../../src/types';
 
 type Role = 'Captain' | 'Officer' | 'Player';
 
@@ -76,6 +76,7 @@ export function finishedMatch(id: number, opponentName: string, ourScore: number
         bestOf: 1,
         maps: [{ mapName: 'Mirage', ourScore, opponentScore }],
         matchOutcome: ourScore > opponentScore ? 'Win' : ourScore < opponentScore ? 'Loss' : 'Draw',
+        lineup: [],
     };
 }
 
@@ -87,6 +88,8 @@ export function finishedMatch(id: number, opponentName: string, ourScore: number
 export class MockApi {
     teams: MockTeam[];
     invites: TeamInvite[] = [];
+    /** The signed-in user's linked SteamID64, or null. */
+    steamId: string | null = null;
     readonly requests: RecordedRequest[] = [];
     private readonly overrides: { method: string; pattern: RegExp; handler: Handler }[] = [];
     private nextId = 1000;
@@ -259,6 +262,47 @@ export class MockApi {
             if (!t) return { status: 404, json: { message: 'Team not found.' } };
             if (method === 'GET') return { json: t.matches };
             if (method === 'POST') return { json: { id: this.nextId++ } };
+        }
+
+        if ((m = path.match(/^\/Matches\/(\d+)\/(\d+)\/lineup$/)) && method === 'PUT') {
+            const t = this.findTeam(m[1]);
+            const target = t?.matches.find(x => x.id === Number(m![2]));
+            if (!t || !target) return { status: 404, json: { message: 'Match was not found.' } };
+            const players = (body?.players ?? []) as { userId: string; role?: string | null; played: boolean }[];
+            if (players.some(p => !t.members.some(x => x.id === p.userId))) {
+                return { status: 400, json: { message: 'Every player in the lineup must be a member of the team.' } };
+            }
+            const lineup: LineupEntry[] = players
+                .map(p => ({
+                    userId: p.userId,
+                    username: t.members.find(x => x.id === p.userId)!.username,
+                    role: p.role?.trim() || null,
+                    played: p.played,
+                }))
+                .sort((a, b) => Number(b.played) - Number(a.played));
+            target.lineup = lineup;
+            return { json: lineup };
+        }
+
+        if (path === '/Account/steam') {
+            const dto = (): SteamAccount => ({
+                steamId: this.steamId,
+                profileUrl: this.steamId ? `https://steamcommunity.com/profiles/${this.steamId}` : null,
+            });
+            if (method === 'GET') return { json: dto() };
+            if (method === 'DELETE') {
+                this.steamId = null;
+                return { json: { message: 'Steam account unlinked.' } };
+            }
+            if (method === 'PUT') {
+                // Only the two forms the tests use; the API also reads STEAM_0 and [U:1:N] IDs.
+                const match = String(body?.steam ?? '').trim().match(/^(?:https?:\/\/steamcommunity\.com\/profiles\/)?(7656119\d{10})\/?$/);
+                if (!match) {
+                    return { status: 400, json: { errors: { Steam: ['Enter your SteamID64 (17 digits), your steamcommunity.com/profiles/ URL, or a STEAM_0:X:Y or [U:1:N] ID.'] } } };
+                }
+                this.steamId = match[1];
+                return { json: dto() };
+            }
         }
 
         if ((m = path.match(/^\/teams\/(\d+)\/events$/i)) && method === 'GET') return { json: [] };

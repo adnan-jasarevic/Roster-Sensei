@@ -5,6 +5,7 @@ import Register from './pages/register';
 import Dashboard from './pages/dashboard';
 import TeamRoster from './pages/teamroster';
 import Matches from './pages/matches';
+import Account from './pages/account';
 import PrivateRoute from './components/private-route';
 import AppLayout from './components/app-layout';
 
@@ -38,6 +39,7 @@ function App() {
                     <Route path="/matches" element={<Matches />} />
                     <Route path="/calendar" element={<CalendarPage />} />
                     <Route path="/statistics" element={<Statistics />} />
+                    <Route path="/account" element={<Account />} />
 
                     {/* fallback */}
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { Bell, LogOut, Mail, Moon, Sun } from 'lucide-react';
+import { Bell, LogOut, Mail, Moon, Sun, UserRound } from 'lucide-react';
 import api from '../services/api';
 import { getApiErrorMessage } from '../services/errors';
 import { useTheme } from '../theme/theme-context';
@@ -126,6 +126,15 @@ export default function TopNavigation({ teams, selectedTeam, onSelectTeam, onInv
                         label={`Switch to ${nextTheme} theme`}
                         icon={theme === 'dark' ? <Sun className="size-5" aria-hidden="true" /> : <Moon className="size-5" aria-hidden="true" />}
                     />
+                    {/* The sidebar has this link on large screens. */}
+                    <Link
+                        to="/account"
+                        aria-label="Account"
+                        title="Account"
+                        className="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 hover:bg-hover hover:text-fg lg:hidden"
+                    >
+                        <UserRound className="size-5" aria-hidden="true" />
+                    </Link>
                     <IconButton onClick={onLogout} label="Log out" className="lg:hidden" icon={<LogOut className="size-5" aria-hidden="true" />} />
                 </div>
             </header>
