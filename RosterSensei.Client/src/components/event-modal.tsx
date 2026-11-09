@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { CalendarOff, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import { getApiErrorMessage } from '../services/errors';
-import { otherTypeOf, pickableTypes } from '../lib/event-types';
+import { eventTitle, otherTypeOf, pickableTypes } from '../lib/event-types';
 import type { SaveTeamEventRequest, TeamEvent, TeamEventType } from '../types';
 import { Alert, Button, ConfirmDialog, Field, Input, Modal, SegmentedControl, Textarea } from './ui';
 
@@ -54,7 +54,7 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
     const [deleteError, setDeleteError] = useState('');
 
     const readOnly = !canManage;
-    const titleError = showFieldErrors && !title.trim() ? 'Give the event a title.' : undefined;
+    const selectedType = types.find(t => t.id === eventTypeId);
     const startError = showFieldErrors && !start ? 'Pick a start time.' : undefined;
     const endError = showFieldErrors && !end
         ? 'Pick an end time.'
@@ -65,12 +65,13 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
         if (readOnly) return;
         setError('');
 
-        if (!title.trim() || !start || !end || endError) {
+        if (!start || !end || endError) {
             setShowFieldErrors(true);
             return;
         }
 
         const payload: SaveTeamEventRequest = {
+            // An empty title is fine: the calendar shows the type's name instead.
             title: title.trim(),
             description: description.trim() || undefined,
             // new Date() reads the datetime-local value as local time; toISOString() sends UTC.
@@ -109,6 +110,10 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
             setIsDeleting(false);
         }
     };
+
+    // Times the event would take, or null while they're incomplete or the wrong way round.
+    const range = start && end && !endError ? { from: new Date(start), to: new Date(end) } : null;
+    const overlaps = useOverlappingEvents(readOnly ? null : teamId, range?.from.getTime(), range?.to.getTime(), event?.id);
 
     const heading = readOnly ? 'Event' : event ? 'Edit event' : 'New event';
 
@@ -170,11 +175,11 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
                     </Alert>
                 )}
 
-                <Field label="Title" required={!readOnly} error={titleError}>
+                <Field label="Title" optional={!readOnly} hint={readOnly ? undefined : `Leave it empty to use the type's name (${selectedType?.name ?? 'Event'}).`}>
                     <Input
-                        value={title}
+                        value={readOnly ? eventTitle(title, selectedType) : title}
                         onChange={(e) => setTitle(e.target.value)}
-                        placeholder="e.g. Pracc vs Tokyo Ronin"
+                        placeholder={selectedType?.name ?? 'e.g. Pracc vs Tokyo Ronin'}
                         maxLength={100}
                         disabled={readOnly}
                         autoComplete="off"
@@ -193,6 +198,22 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
                     </Field>
                 </div>
 
+                {overlaps.length > 0 && (
+                    <Alert tone="warning">
+                        <span data-testid="overlap-warning">
+                            {overlaps.length === 1 ? 'This overlaps ' : `This overlaps ${overlaps.length} events: `}
+                            {overlaps.slice(0, 3).map((other, index) => (
+                                <span key={other.id}>
+                                    {index > 0 && ', '}
+                                    <strong className="text-fg">{eventTitle(other.title, types.find(t => t.id === other.eventTypeId))}</strong>
+                                    {' '}({formatTimes(other)})
+                                </span>
+                            ))}
+                            {overlaps.length > 3 && ` and ${overlaps.length - 3} more`}. You can still save it.
+                        </span>
+                    </Alert>
+                )}
+
                 <Field label="Description" optional={!readOnly}>
                     <Textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} disabled={readOnly} />
                 </Field>
@@ -208,8 +229,53 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
                 busy={isDeleting}
                 error={deleteError}
             >
-                Delete <strong className="text-fg">{event?.title}</strong>? This can't be undone.
+                Delete <strong className="text-fg">{eventTitle(event?.title, selectedType)}</strong>? This can't be undone.
             </ConfirmDialog>
         </Modal>
     );
+}
+
+const formatTimes = (other: TeamEvent) => {
+    const from = new Date(other.startTime);
+    const to = new Date(other.endTime);
+    const sameDay = format(from, 'yyyy-MM-dd') === format(to, 'yyyy-MM-dd');
+    return `${format(from, 'EEE d MMM, HH:mm')}–${format(to, sameDay ? 'HH:mm' : 'EEE d MMM, HH:mm')}`;
+};
+
+// Waits this long after the last change to the times before asking the server.
+const OVERLAP_CHECK_DELAY_MS = 300;
+
+/**
+ * The team's other events that overlap the given times, asked from the server so events outside the
+ * calendar's visible range count too. Only a reminder: overlapping events can still be saved. A check
+ * still waiting or in flight when the times change again is cancelled, so an older answer can't win.
+ */
+function useOverlappingEvents(teamId: number | null, fromMs: number | undefined, toMs: number | undefined, ownId: number | undefined) {
+    const [result, setResult] = useState<{ key: string; events: TeamEvent[] } | null>(null);
+    const key = teamId !== null && fromMs !== undefined && toMs !== undefined && !Number.isNaN(fromMs) && !Number.isNaN(toMs)
+        ? `${teamId}:${fromMs}:${toMs}`
+        : null;
+
+    useEffect(() => {
+        if (key === null) return;
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => {
+            api.get<TeamEvent[]>(`/teams/${teamId}/events`, {
+                signal: controller.signal,
+                params: { from: new Date(fromMs!).toISOString(), to: new Date(toMs!).toISOString() },
+            }).then(
+                response => setResult({ key, events: response.data }),
+                // Only a reminder: if the check fails, saving still works and the server has the last word.
+                () => undefined,
+            );
+        }, OVERLAP_CHECK_DELAY_MS);
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [key, teamId, fromMs, toMs]);
+
+    // An answer for times the form no longer has is ignored.
+    if (key === null || result?.key !== key) return [];
+    return result.events.filter(other => other.id !== ownId);
 }

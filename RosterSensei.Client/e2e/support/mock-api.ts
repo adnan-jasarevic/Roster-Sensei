@@ -1,5 +1,5 @@
 import type { Page, Request, Route } from '@playwright/test';
-import type { LineupEntry, Match, SteamAccount, Team, TeamDashboardData, TeamInvite, TeamMember, TeamStats } from '../../src/types';
+import type { LineupEntry, Match, SteamAccount, Team, TeamDashboardData, TeamEvent, TeamEventType, TeamInvite, TeamMember, TeamOffDay, TeamStats } from '../../src/types';
 
 type Role = 'Captain' | 'Officer' | 'Player';
 
@@ -11,6 +11,24 @@ export interface MockTeam {
     isOwner: boolean;
     members: TeamMember[];
     matches: Match[];
+    events: TeamEvent[];
+    eventTypes: TeamEventType[];
+    offDays: TeamOffDay[];
+}
+
+/** The premade types a new team starts with, ids 1-5 (Other is 5). */
+export function defaultEventTypes(): TeamEventType[] {
+    return [
+        { id: 1, name: 'Pracc', color: '#3b82f6', preset: 'Pracc', isLocked: false },
+        { id: 2, name: 'Official Match', color: '#ef4444', preset: 'OfficialMatch', isLocked: false },
+        { id: 3, name: 'VOD Review', color: '#a855f7', preset: 'VodReview', isLocked: false },
+        { id: 4, name: 'Theory', color: '#22c55e', preset: 'Theory', isLocked: false },
+        { id: 5, name: 'Other', color: '#6b7280', preset: 'Other', isLocked: true },
+    ];
+}
+
+export function teamEvent(id: number, title: string, startTime: string, endTime: string, extra: Partial<TeamEvent> = {}): TeamEvent {
+    return { id, teamId: 1, title, description: null, startTime, endTime, eventTypeId: 1, version: 1, ...extra };
 }
 
 export interface RecordedRequest {
@@ -60,6 +78,9 @@ export function team(id: number, name: string, role: Role = 'Captain', isOwner =
             member('mika', 'Officer'),
         ],
         matches: [],
+        events: [],
+        eventTypes: defaultEventTypes(),
+        offDays: [],
         ...extra,
     };
 }
@@ -305,7 +326,49 @@ export class MockApi {
             }
         }
 
-        if ((m = path.match(/^\/teams\/(\d+)\/events$/i)) && method === 'GET') return { json: [] };
+        if ((m = path.match(/^\/teams\/(\d+)\/events$/i))) {
+            const t = this.findTeam(m[1]);
+            if (!t) return { status: 404, json: { message: 'Team not found.' } };
+            if (method === 'GET') {
+                const from = new Date(url.searchParams.get('from') ?? 0);
+                const to = new Date(url.searchParams.get('to') ?? 0);
+                return { json: t.events.filter(e => new Date(e.startTime) < to && new Date(e.endTime) > from) };
+            }
+            if (method === 'POST') {
+                const created: TeamEvent = { id: this.nextId++, teamId: t.id, title: String(body?.title ?? ''), description: body?.description ?? null, startTime: body?.startTime, endTime: body?.endTime, eventTypeId: body?.eventTypeId, version: 1 };
+                t.events.push(created);
+                return { json: created };
+            }
+        }
+
+        if ((m = path.match(/^\/teams\/(\d+)\/events\/(\d+)$/i))) {
+            const t = this.findTeam(m[1]);
+            const index = t?.events.findIndex(e => e.id === Number(m![2])) ?? -1;
+            if (!t || index < 0) return { status: 404, json: { message: 'Event was not found.' } };
+            if (method === 'PUT') {
+                const current = t.events[index];
+                if (body?.version !== current.version) return { status: 409, json: { message: 'Someone else changed this event while you were editing it. Open it again to see their changes.' } };
+                const updated: TeamEvent = { ...current, title: String(body?.title ?? ''), description: body?.description ?? null, startTime: body?.startTime, endTime: body?.endTime, eventTypeId: body?.eventTypeId, version: current.version + 1 };
+                t.events[index] = updated;
+                return { json: updated };
+            }
+            if (method === 'DELETE') {
+                t.events.splice(index, 1);
+                return { json: { message: 'Event deleted.' } };
+            }
+        }
+
+        if ((m = path.match(/^\/teams\/(\d+)\/event-types$/i)) && method === 'GET') {
+            const t = this.findTeam(m[1]);
+            if (!t) return { status: 404, json: { message: 'Team not found.' } };
+            return { json: { types: t.eventTypes, availablePresets: [] } };
+        }
+
+        if ((m = path.match(/^\/teams\/(\d+)\/off-days$/i)) && method === 'GET') {
+            const t = this.findTeam(m[1]);
+            if (!t) return { status: 404, json: { message: 'Team not found.' } };
+            return { json: t.offDays };
+        }
 
         return { status: 404, json: { message: `No mock for ${method} ${path}` } };
     }

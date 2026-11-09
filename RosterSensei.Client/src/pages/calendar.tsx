@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Calendar as BigCalendar, Views, dateFnsLocalizer, type Components, type EventProps, type SlotInfo, type View } from 'react-big-calendar';
+import { Calendar as BigCalendar, Views, dateFnsLocalizer, type Components, type EventProps, type HeaderProps, type SlotInfo, type View } from 'react-big-calendar';
+import dragAndDropAddon, { type EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
+import axios from 'axios';
 import { addDays, endOfMonth, format, getDay, parse, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import { CalendarOff, CalendarPlus, Tags } from 'lucide-react';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import './calendar.css';
 import api from '../services/api';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { cx } from '../lib/cx';
 import EventModal from '../components/event-modal';
 import EventTypesModal from '../components/event-types-modal';
-import { EventTypeIcon, otherTypeOf, textColorFor } from '../lib/event-types';
+import { EventTypeIcon, eventTitle, otherTypeOf, textColorFor } from '../lib/event-types';
 import { getApiErrorMessage } from '../services/errors';
 import PageHeader, { PageContainer } from '../components/page-header';
 import TeamGate from '../components/team-gate';
 import { Alert, Button, Card, ErrorState, Modal, Skeleton, useToast } from '../components/ui';
-import { type Match, type Team, type TeamEvent, type TeamEventType, type TeamEventTypes, type TeamOffDay, canManageTeam } from '../types';
+import { type Match, type Team, type SaveTeamEventRequest, type TeamEvent, type TeamEventType, type TeamEventTypes, type TeamOffDay, canManageTeam } from '../types';
 
 // Weeks start on Monday.
 const localizer = dateFnsLocalizer({
@@ -38,6 +41,23 @@ interface CalendarItem {
     event?: TeamEvent;
     /** The event sits on an off day. */
     cancelled: boolean;
+    /** Can be dragged to new times: a team event (not a recorded match) that isn't being saved right now. */
+    draggable: boolean;
+}
+
+// The addon is CommonJS. Depending on the bundler, its default export arrives as is or wrapped once more.
+const withDragAndDrop = ((dragAndDropAddon as unknown as { default?: typeof dragAndDropAddon }).default ?? dragAndDropAddon);
+const DragAndDropCalendar = withDragAndDrop<CalendarItem>(BigCalendar);
+
+/**
+ * An event dragged to new times, shown at its new place while the save is running and until the
+ * calendar has reloaded after it, so it doesn't jump back for a moment.
+ */
+interface PendingMove {
+    event: TeamEvent;
+    saving: boolean;
+    /** The calendar data the move was saved on top of. Once newer data loads, it has the move in it. */
+    base: CalendarData | undefined;
 }
 
 // Events of these premade types are replaced by a recorded match that starts during them.
@@ -111,7 +131,22 @@ function CalendarContent({ team }: { team: Team }) {
     // Keeps the current events on screen while the next month loads, instead of blanking the grid.
     const { data, error, isLoading, isFetching, reload } = useResource(load, 'Failed to load the calendar.', { keepPrevious: true });
 
+    const [moves, setMoves] = useState<Record<number, PendingMove>>({});
+    // The latest data, for a save that finishes after the calendar has reloaded.
+    const dataRef = useRef(data);
+    useEffect(() => { dataRef.current = data; }, [data]);
+
     const types = useMemo(() => data?.eventTypes.types ?? [], [data]);
+
+    // Events with any dragged move applied that the loaded data doesn't have yet.
+    const events = useMemo(() => {
+        if (!data) return [];
+        return data.events.map(e => {
+            const move = moves[e.id];
+            return move && (move.saving || move.base === data) ? move.event : e;
+        });
+    }, [data, moves]);
+
     const offDayKeys = useMemo(() => new Set((data?.offDays ?? []).map(d => d.date)), [data]);
 
     const items = useMemo<CalendarItem[]>(() => {
@@ -127,7 +162,7 @@ function CalendarContent({ team }: { team: Team }) {
 
         // A recorded match that starts during a Scrim or Official Match event takes that event's place.
         const replacedBy = new Map<number, Match>();
-        for (const e of data.events) {
+        for (const e of events) {
             const preset = byId.get(e.eventTypeId)?.preset;
             if (!preset || !REPLACED_BY_RECORDED_MATCH.has(preset)) continue;
             const start = new Date(e.startTime).getTime();
@@ -139,19 +174,28 @@ function CalendarContent({ team }: { team: Team }) {
             if (match) replacedBy.set(e.id, match);
         }
 
-        const eventItems = data.events
+        const eventItems = events
             .filter(e => !replacedBy.has(e.id))
             .map(e => {
                 const start = new Date(e.startTime);
                 const end = new Date(e.endTime);
-                return { title: e.title, start, end, type: byId.get(e.eventTypeId) ?? other, event: e, cancelled: onOffDay(start, end) };
+                const type = byId.get(e.eventTypeId) ?? other;
+                return {
+                    title: eventTitle(e.title, type),
+                    start,
+                    end,
+                    type,
+                    event: e,
+                    cancelled: onOffDay(start, end),
+                    draggable: canManage && !moves[e.id]?.saving,
+                };
             });
 
         const matchItems = matches.map(m => {
             const start = new Date(m.scheduledDate);
             const score = m.status === 'Finished' ? ` (${m.finalScore})` : '';
             // Opening the match opens the event it replaced, so that event can still be edited or deleted.
-            const replaced = data.events.find(e => replacedBy.get(e.id) === m);
+            const replaced = events.find(e => replacedBy.get(e.id) === m);
             return {
                 title: `vs ${m.opponentName}${score}`,
                 start,
@@ -159,11 +203,12 @@ function CalendarContent({ team }: { team: Team }) {
                 type: recordedType!,
                 event: replaced,
                 cancelled: false,
+                draggable: false,
             };
         });
 
         return [...eventItems, ...matchItems];
-    }, [data, types]);
+    }, [data, events, types, moves, canManage]);
 
     const openItem = useCallback((item: CalendarItem) => {
         if (item.event) setModal({ mode: 'open', event: item.event, cancelled: item.cancelled });
@@ -182,6 +227,61 @@ function CalendarContent({ team }: { team: Team }) {
         } catch (err: unknown) {
             toast.error(getApiErrorMessage(err, 'Failed to mark the off day.'));
         }
+    };
+
+    // Saves an event dragged (or resized) to new times. The save carries the version the event was
+    // shown with, so a drag over someone else's newer edit is refused instead of overwriting it, and an
+    // event can't be dragged again until its save is done, so two drags of one event can't race.
+    const moveEvent = async ({ event: item, start, end }: EventInteractionArgs<CalendarItem>) => {
+        const original = item.event;
+        if (!original || !item.draggable || !data) return;
+        const newStart = new Date(start);
+        const newEnd = new Date(end);
+        if (newStart.getTime() === new Date(original.startTime).getTime() && newEnd.getTime() === new Date(original.endTime).getTime()) return;
+
+        const offDay = data.offDays.find(d => new Date(d.startTime) < newEnd && new Date(d.endTime) > newStart);
+        if (offDay) {
+            toast.error(`${format(new Date(offDay.startTime), 'EEEE d MMMM')} is an off day, so no events can be moved onto it.`);
+            return;
+        }
+
+        const moved: TeamEvent = { ...original, startTime: newStart.toISOString(), endTime: newEnd.toISOString() };
+        setMoves(previous => {
+            // Finished moves the loaded data already has are dropped, so the list doesn't grow.
+            const kept = Object.fromEntries(Object.entries(previous).filter(([, move]) => move.saving || move.base === data));
+            return { ...kept, [original.id]: { event: moved, saving: true, base: data } };
+        });
+
+        try {
+            const request: SaveTeamEventRequest = {
+                title: original.title,
+                description: original.description ?? undefined,
+                startTime: moved.startTime,
+                endTime: moved.endTime,
+                eventTypeId: original.eventTypeId,
+                version: original.version,
+            };
+            const { data: saved } = await api.put<TeamEvent>(`/teams/${team.id}/events/${original.id}`, request);
+            setMoves(previous => ({ ...previous, [original.id]: { event: saved, saving: false, base: dataRef.current } }));
+
+            const overlapping = events.filter(e => e.id !== original.id && new Date(e.startTime) < newEnd && new Date(e.endTime) > newStart);
+            const name = item.title;
+            toast.success(overlapping.length === 0
+                ? `Moved ${name} to ${format(newStart, 'EEE d MMM, HH:mm')}.`
+                : `Moved ${name}. Heads up: it now overlaps ${overlapping.length === 1 ? eventTitle(overlapping[0].title, types.find(t => t.id === overlapping[0].eventTypeId)) : `${overlapping.length} events`}.`);
+        } catch (err: unknown) {
+            setMoves(previous => {
+                const rest = { ...previous };
+                delete rest[original.id];
+                return rest;
+            });
+            toast.error(getApiErrorMessage(err, 'Failed to move the event.'));
+            // Someone else changed or deleted it: show what is there now.
+            const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+            if (status === 409 || status === 404) reload();
+            return;
+        }
+        reload();
     };
 
     const handleSelectSlot = (slot: SlotInfo) => {
@@ -220,8 +320,8 @@ function CalendarContent({ team }: { team: Team }) {
             ),
         },
         // The library's day headers carry role="columnheader" with no table around them.
-        week: { header: DayHeader, event: TimeGridEventChip },
-        day: { header: DayHeader, event: TimeGridEventChip },
+        week: { header: TimeGridDayHeader, event: TimeGridEventChip },
+        day: { header: TimeGridDayHeader, event: TimeGridEventChip },
         // The agenda view has no onSelectEvent of its own, so its button opens the event directly.
         agenda: {
             event: ({ event: item }: EventProps<CalendarItem>) => (
@@ -234,7 +334,7 @@ function CalendarContent({ team }: { team: Team }) {
         <PageContainer>
             <PageHeader
                 title="Calendar"
-                description={<>Your team's schedule.{canManage && <span className="max-sm:hidden"> Click a day or drag over a time range to add an event or mark an off day.</span>}</>}
+                description={<>Your team's schedule.{canManage && <span className="max-sm:hidden"> Click a day or drag over a time range to add an event or mark an off day. Drag an event to move it.</span>}</>}
                 actions={canManage && (
                     <>
                         <Button variant="secondary" onClick={() => setModal({ mode: 'types' })} disabled={!data} leftIcon={<Tags className="size-4" aria-hidden="true" />}>Event types</Button>
@@ -277,7 +377,7 @@ function CalendarContent({ team }: { team: Team }) {
                     <ErrorState title="Couldn't load the calendar" message={error} onRetry={reload} retrying={isFetching} />
                 ) : (
                     <TimeGridA11yFix>
-                    <BigCalendar<CalendarItem>
+                    <DragAndDropCalendar
                         localizer={localizer}
                         culture="en-US"
                         events={items}
@@ -289,6 +389,10 @@ function CalendarContent({ team }: { team: Team }) {
                         selectable={canManage}
                         onSelectSlot={handleSelectSlot}
                         onSelectEvent={openItem}
+                        draggableAccessor={item => item.draggable}
+                        resizableAccessor={item => item.draggable}
+                        onEventDrop={moveEvent}
+                        onEventResize={moveEvent}
                         onKeyPressEvent={(item, keyEvent) => {
                             const { key } = keyEvent as unknown as KeyboardEvent;
                             if (!item.event || (key !== 'Enter' && key !== ' ')) return;
@@ -301,7 +405,7 @@ function CalendarContent({ team }: { team: Team }) {
                         components={components}
                         tooltipAccessor={item => `${item.type.name}: ${item.title}${item.cancelled ? ' (cancelled, off day)' : ''}`}
                         eventPropGetter={item => ({
-                            className: cx(!item.event && 'is-readonly', item.cancelled && 'is-cancelled'),
+                            className: cx(!item.event && 'is-readonly', item.cancelled && 'is-cancelled', item.event && moves[item.event.id]?.saving && 'is-saving'),
                             style: { backgroundColor: item.type.color, color: textColorFor(item.type.color) },
                         })}
                         dayPropGetter={day => (offDayKeys.has(dayKey(day)) ? { className: 'is-off-day' } : {})}
@@ -359,8 +463,20 @@ function TimeGridEventChip(props: EventProps<CalendarItem>) {
     return <EventLabel item={props.event} clickable={inAllDayRow && Boolean(props.event.event)} />;
 }
 
-function DayHeader({ label }: { label: ReactNode }) {
-    return <span>{label}</span>;
+// Week and day view column headers: the date, with the day's name underneath. Phones get short forms.
+function TimeGridDayHeader({ date }: HeaderProps) {
+    return (
+        <span className="rs-day-header">
+            <span className="rs-day-header-date">
+                <span className="sm:hidden">{format(date, 'd')}</span>
+                <span className="max-sm:hidden">{format(date, 'd MMM')}</span>
+            </span>
+            <span className="rs-day-header-name">
+                <span className="sm:hidden">{format(date, 'EEE')}</span>
+                <span className="max-sm:hidden">{format(date, 'EEEE')}</span>
+            </span>
+        </span>
+    );
 }
 
 // Fixes markup the library renders itself, so it is done after each render rather than through props.

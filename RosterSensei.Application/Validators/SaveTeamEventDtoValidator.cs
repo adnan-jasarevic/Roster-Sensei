@@ -7,8 +7,8 @@ public class SaveTeamEventDtoValidator : AbstractValidator<SaveTeamEventDto>
 {
     public SaveTeamEventDtoValidator()
     {
+        // The title is optional: an event without one is shown under its type's name.
         RuleFor(e => e.Title)
-            .NotEmpty().WithMessage("The event title is required.")
             .MaximumLength(100).WithMessage("The event title cannot exceed 100 characters.");
 
         RuleFor(e => e.Description)
