@@ -14,6 +14,7 @@ A web app for amateur Counter-Strike 2 teams to manage their roster, schedule ma
 - **Invites:** invite registered users by email. They accept or decline from the notification bell.
 - **Dashboard:** win rate, member count, recent results and upcoming matches for the selected team.
 - **Matches:** schedule or record matches with opponent, tournament, format (Bo1/Bo2/Bo3/Bo5), maps in play order, score and notes. Filter by upcoming or results.
+- **Lineups (API only, no screen yet):** the Owner, Captain and Officers record who played each match, with an optional free-text role and whether they played or sat on the bench (`PUT /api/Matches/{teamId}/{matchId}/lineup`). Matches are returned with their lineup.
 - **Calendar:** plan praccs, official matches, VOD reviews and more in month, week, day and agenda views.
   - **Event types:** each team picks its own. New teams start with Pracc, Official Match, VOD Review, Theory and Other; Scrim, Recorded Match, Break, Warmup and Meet can be added, as can custom types. Types can be renamed, recoloured and removed. Removing a type keeps its events and moves them to Other, which every team always has and which can't be changed.
   - **Recorded matches:** with the Recorded Match type on, matches from the Matches page show on the calendar, and one that starts during a Scrim or Official Match event takes that event's place.
@@ -102,7 +103,7 @@ The backend tests run the real services and repositories against an in-memory SQ
 dotnet test RosterSensei.Tests
 ```
 
-They cover team membership, invites, roles and permissions, ownership transfer, leaving and deleting teams, and Steam account linking. The tests in `RosterSensei.Tests/Api` also start the whole API in memory and call it over HTTP, to check sign-up, login, JWT validation, request validation and the status codes errors map to.
+They cover team membership, invites, roles and permissions, ownership transfer, leaving and deleting teams, Steam account linking, and match lineups. The tests in `RosterSensei.Tests/Api` also start the whole API in memory and call it over HTTP, to check sign-up, login, JWT validation, request validation and the status codes errors map to.
 
 The frontend has browser tests (Playwright and axe) that run the production build against a mocked API, so they need no backend either:
 
@@ -120,6 +121,6 @@ GitHub Actions runs on every pull request and on every push to `master`: it buil
 
 Planned features:
 
-- [Match participation](https://github.com/adnan-jasarevic/Roster-Sensei/issues/18): who played each match
+- [Match participation](https://github.com/adnan-jasarevic/Roster-Sensei/issues/18): a lineup picker in the app (the API is done)
 - [Player stats per match](https://github.com/adnan-jasarevic/Roster-Sensei/issues/19)
 - [Link a Steam account](https://github.com/adnan-jasarevic/Roster-Sensei/issues/20)
