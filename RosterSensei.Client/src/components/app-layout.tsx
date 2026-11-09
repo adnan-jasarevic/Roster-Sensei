@@ -1,7 +1,7 @@
 ﻿import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CalendarDays, ChartNoAxesCombined, LayoutDashboard, LogOut, Swords, Users, type LucideIcon } from 'lucide-react';
+import { CalendarDays, ChartNoAxesCombined, LayoutDashboard, LogOut, Swords, UserRound, Users, type LucideIcon } from 'lucide-react';
 import api from '../services/api';
 import { useResource } from '../hooks/use-resource';
 import { cx } from '../lib/cx';
@@ -75,7 +75,7 @@ export default function AppLayout() {
         navigate('/login');
     };
 
-    const currentPage = NAV_ITEMS.find(item => pathname.startsWith(item.to))?.label;
+    const currentPage = pathname.startsWith('/account') ? 'Account' : NAV_ITEMS.find(item => pathname.startsWith(item.to))?.label;
 
     return (
         <div className="flex h-dvh overflow-hidden bg-canvas text-fg">
@@ -100,7 +100,10 @@ export default function AppLayout() {
                         </NavLink>
                     ))}
                 </nav>
-                <div className="border-t border-line p-3">
+                <div className="flex flex-col gap-1 border-t border-line p-3">
+                    <NavLink to="/account" className={({ isActive }) => cx('flex h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold transition-colors', isActive ? 'bg-hover text-fg' : 'text-fg-muted hover:bg-hover hover:text-fg')}>
+                        <UserRound className="size-5" aria-hidden="true" /> Account
+                    </NavLink>
                     <button type="button" onClick={handleLogout} className="flex h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold text-fg-muted transition-colors hover:bg-hover hover:text-fg">
                         <LogOut className="size-5" aria-hidden="true" /> Log out
                     </button>

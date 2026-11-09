@@ -40,7 +40,35 @@ export interface Match {
     maps: MatchMap[];
     matchOutcome: MatchOutcome;
     notes?: string;
+    /** Who was in the lineup, players who played first. Empty when it wasn't recorded. */
+    lineup: LineupEntry[];
 }
+
+/** One player in a match lineup, as the API returns it. */
+export interface LineupEntry {
+    userId: string;
+    username: string;
+    /** Free text such as "AWP" or "IGL". Null when not recorded. */
+    role: string | null;
+    /** False for a substitute who was named but didn't play. */
+    played: boolean;
+}
+
+/** Body of PUT /Matches/{teamId}/{matchId}/lineup. Replaces the whole lineup; an empty list clears it. */
+export interface SetLineupRequest {
+    players: { userId: string; role?: string; played: boolean }[];
+}
+
+/** Limits enforced by SetMatchLineupDtoValidator. */
+export const LINEUP_MAX_PLAYERS = 10;
+export const LINEUP_MAX_ROLE_LENGTH = 30;
+
+/** The signed-in user's linked Steam account. Both fields are null when none is linked. */
+export interface SteamAccount {
+    steamId: string | null;
+    profileUrl: string | null;
+}
+
 export interface MatchResponse {
     id: number;
     opponentName: string;
@@ -67,6 +95,9 @@ export interface TeamMember {
     role: string; 
     isOwner: boolean;
     joinedAt: string;
+    /** SteamID64 and profile link of the member's linked Steam account, or null. */
+    steamId?: string | null;
+    steamProfileUrl?: string | null;
 }
 
 export interface AddTeamMemberRequest {

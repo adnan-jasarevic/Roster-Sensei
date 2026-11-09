@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowRightLeft, EllipsisVertical, LogOut, MailPlus, Shield, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
+import { ArrowRightLeft, EllipsisVertical, Gamepad2, LogOut, MailPlus, Shield, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
 import api from '../services/api';
 import { getApiErrorMessage } from '../services/errors';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
@@ -189,7 +189,22 @@ function RosterContent({ team }: { team: Team }) {
                                         <div className="flex min-w-0 items-center gap-3">
                                             <Avatar name={member.username} className="max-sm:hidden" />
                                             <div className="min-w-0">
-                                                <p className="truncate font-semibold text-fg">{member.username}</p>
+                                                <p className="flex min-w-0 items-center gap-1.5">
+                                                    <span className="truncate font-semibold text-fg">{member.username}</span>
+                                                    {member.steamProfileUrl && (
+                                                        <a
+                                                            href={member.steamProfileUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            title={`${member.username}'s Steam profile`}
+                                                            className="inline-flex shrink-0 items-center gap-1 rounded px-1 text-xs font-semibold text-fg-subtle hover:bg-hover hover:text-fg"
+                                                        >
+                                                            <Gamepad2 className="size-3.5" aria-hidden="true" />
+                                                            Steam
+                                                            <span className="sr-only">profile of {member.username} (opens in a new tab)</span>
+                                                        </a>
+                                                    )}
+                                                </p>
                                                 <p className="truncate text-xs text-fg-subtle">{member.email}</p>
                                             </div>
                                         </div>
