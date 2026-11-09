@@ -1,16 +1,17 @@
 import { useCallback, useState } from 'react';
-import { CalendarPlus, Swords } from 'lucide-react';
+import { CalendarPlus, Swords, UsersRound } from 'lucide-react';
 import api from '../services/api';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { cx } from '../lib/cx';
 import { formatDateTime } from '../lib/format';
-import { type Match, type MatchMap, type Team, canManageTeam } from '../types';
+import { type LineupEntry, type Match, type MatchMap, type Team, canManageTeam } from '../types';
 import AddMatchModal from '../components/add-match-modal';
+import LineupModal from '../components/lineup-modal';
 import { MatchStatusBadge, OutcomeBadge } from '../components/domain-badges';
 import PageHeader, { PageContainer } from '../components/page-header';
 import { ListSkeleton } from '../components/page-skeletons';
 import TeamGate from '../components/team-gate';
-import { Alert, Button, Card, EmptyState, ErrorState, SegmentedControl } from '../components/ui';
+import { Alert, Button, Card, EmptyState, ErrorState, SegmentedControl, useToast } from '../components/ui';
 
 type Filter = 'all' | 'upcoming' | 'results';
 
@@ -52,7 +53,11 @@ function MatchesContent({ team }: { team: Team }) {
     const { data: matches, error, isLoading, isFetching, reload } = useResource(load, 'Failed to load matches.');
     const [filter, setFilter] = useState<Filter>('all');
     const [isAddMatchOpen, setIsAddMatchOpen] = useState(false);
+    const [lineupMatchId, setLineupMatchId] = useState<number | null>(null);
     const canManageMatches = canManageTeam(team);
+    const toast = useToast();
+
+    const lineupMatch = matches?.find(m => m.id === lineupMatchId);
 
     // The API returns matches newest first.
     const visibleMatches = (matches ?? []).filter(m => {
@@ -89,18 +94,37 @@ function MatchesContent({ team }: { team: Team }) {
                     />
                 ) : (
                     <ul className="divide-y divide-line">
-                        {visibleMatches.map(match => <MatchRow key={match.id} match={match} />)}
+                        {visibleMatches.map(match => (
+                            <MatchRow key={match.id} match={match} onEditLineup={canManageMatches ? () => setLineupMatchId(match.id) : undefined} />
+                        ))}
                     </ul>
                 )}
             </Card>
 
             {isAddMatchOpen && <AddMatchModal teamId={team.id} onClose={() => setIsAddMatchOpen(false)} onCreated={reload} />}
+
+            {/* Keyed by match, so opening another match never carries over picks from the last one. */}
+            {lineupMatch && (
+                <LineupModal
+                    key={lineupMatch.id}
+                    teamId={team.id}
+                    match={lineupMatch}
+                    onClose={() => setLineupMatchId(null)}
+                    onSaved={() => {
+                        setLineupMatchId(null);
+                        toast.success(`Lineup saved for the match vs ${lineupMatch.opponentName}.`);
+                        reload();
+                    }}
+                    onMatchMissing={reload}
+                />
+            )}
         </PageContainer>
     );
 }
 
-function MatchRow({ match }: { match: Match }) {
+function MatchRow({ match, onEditLineup }: { match: Match; onEditLineup?: () => void }) {
     const isFinished = match.status === 'Finished';
+    const lineup = match.lineup ?? [];
     const details = [
         formatDateTime(match.scheduledDate),
         match.type === 'Scrim' && 'Scrim',
@@ -109,26 +133,45 @@ function MatchRow({ match }: { match: Match }) {
     ].filter(Boolean).join(' · ');
 
     return (
-        <li className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between lg:px-5">
-            <div className="flex min-w-0 items-center gap-3">
-                <span className="shrink-0">
-                    {isFinished ? <OutcomeBadge outcome={match.matchOutcome} /> : <MatchStatusBadge status={match.status} />}
-                </span>
-                <div className="min-w-0">
-                    <p className="truncate font-semibold text-fg">vs {match.opponentName}</p>
-                    <p className="text-xs break-words text-fg-subtle">{details}</p>
+        <li className="flex flex-col gap-3 p-4 lg:px-5">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                    <span className="shrink-0">
+                        {isFinished ? <OutcomeBadge outcome={match.matchOutcome} /> : <MatchStatusBadge status={match.status} />}
+                    </span>
+                    <div className="min-w-0">
+                        <p className="truncate font-semibold text-fg">vs {match.opponentName}</p>
+                        <p className="text-xs break-words text-fg-subtle">{details}</p>
+                    </div>
+                    {isFinished && <span className="ml-auto shrink-0 pl-2 font-display text-lg font-black whitespace-nowrap text-fg tabular-nums md:hidden">{match.finalScore}</span>}
                 </div>
-                {isFinished && <span className="ml-auto shrink-0 pl-2 font-display text-lg font-black whitespace-nowrap text-fg tabular-nums md:hidden">{match.finalScore}</span>}
+
+                <div className="flex min-w-0 items-center gap-4 md:justify-end">
+                    {match.maps.length > 0 && (
+                        <ul className="flex flex-wrap gap-1.5 md:justify-end">
+                            {match.maps.map((map, index) => <MapChip key={`${map.mapName}-${index}`} map={map} />)}
+                        </ul>
+                    )}
+                    {isFinished && <span className="hidden min-w-14 shrink-0 text-right font-display text-lg font-black whitespace-nowrap text-fg tabular-nums md:block">{match.finalScore}</span>}
+                </div>
             </div>
 
-            <div className="flex min-w-0 items-center gap-4 md:justify-end">
-                {match.maps.length > 0 && (
-                    <ul className="flex flex-wrap gap-1.5 md:justify-end">
-                        {match.maps.map((map, index) => <MapChip key={`${map.mapName}-${index}`} map={map} />)}
-                    </ul>
-                )}
-                {isFinished && <span className="hidden min-w-14 shrink-0 text-right font-display text-lg font-black whitespace-nowrap text-fg tabular-nums md:block">{match.finalScore}</span>}
-            </div>
+            {(lineup.length > 0 || onEditLineup) && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    {lineup.length > 0 ? <Lineup lineup={lineup} opponentName={match.opponentName} /> : <p className="text-xs text-fg-subtle">No lineup recorded.</p>}
+                    {onEditLineup && (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={onEditLineup}
+                            leftIcon={<UsersRound className="size-4" aria-hidden="true" />}
+                            aria-label={`${lineup.length > 0 ? 'Edit' : 'Set'} lineup for the match vs ${match.opponentName}`}
+                        >
+                            {lineup.length > 0 ? 'Edit lineup' : 'Set lineup'}
+                        </Button>
+                    )}
+                </div>
+            )}
         </li>
     );
 }
@@ -146,5 +189,26 @@ function MapChip({ map }: { map: MatchMap }) {
             {played && <span className={cx('ml-1.5 font-bold tabular-nums', scoreClass)}>{map.ourScore}-{map.opponentScore}</span>}
             {halves && <span className="ml-1.5 text-fg-subtle tabular-nums">({halves})</span>}
         </li>
+    );
+}
+
+// Players who played, then substitutes, each with their role when one was recorded.
+function Lineup({ lineup, opponentName }: { lineup: LineupEntry[]; opponentName: string }) {
+    return (
+        <ul aria-label={`Lineup vs ${opponentName}`} className="flex flex-wrap gap-1.5">
+            {lineup.map(player => (
+                <li
+                    key={player.userId}
+                    className={cx(
+                        'rounded border px-2 py-1 text-xs',
+                        player.played ? 'border-line bg-sunken text-fg' : 'border-dashed border-line-strong text-fg-subtle',
+                    )}
+                >
+                    <span className="font-semibold">{player.username}</span>
+                    {player.role && <span className="ml-1.5 text-fg-muted">{player.role}</span>}
+                    {!player.played && <span className="ml-1.5">(sub, didn't play)</span>}
+                </li>
+            ))}
+        </ul>
     );
 }
