@@ -294,3 +294,39 @@
     filter: grayscale(0.7);
     text-decoration: line-through;
 }
+
+/* Week and day views: the date, with the day's name underneath. */
+.team-calendar .rbc-time-header-cell {
+    flex-shrink: 0;
+}
+
+.team-calendar .rbc-time-header .rbc-header {
+    height: auto;
+}
+
+.team-calendar .rs-day-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
+}
+
+.team-calendar .rs-day-header-date {
+    color: var(--rs-fg);
+    font-size: 0.8125rem;
+    text-transform: none;
+}
+
+.team-calendar .rs-day-header-name {
+    font-size: 0.6875rem;
+}
+
+/* Events that can be dragged show it; one being saved can't be dragged again until it's done. */
+.team-calendar .rbc-addons-dnd-draggable-event {
+    cursor: grab;
+}
+
+.team-calendar .rbc-addons-dnd-dragged-event,
+.team-calendar .rbc-event.is-saving {
+    opacity: 0.6;
+}

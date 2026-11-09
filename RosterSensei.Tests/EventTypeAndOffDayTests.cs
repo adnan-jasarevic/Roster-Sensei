@@ -247,6 +247,34 @@ public class EventTypeAndOffDayTests : IDisposable
         Assert.False(context.TeamOffDays.Any(d => d.TeamId == _teamId));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public async Task An_event_without_a_title_is_saved_with_an_empty_one(string? title)
+    {
+        // The calendar shows the type's name for it, so a renamed type renames the event too.
+        var created = await _db.EventService().CreateEventAsync(_owner, _teamId, NewEvent(title!, Pracc()));
+
+        Assert.True(created.Success, created.ErrorMessage);
+        Assert.Equal(string.Empty, Assert.Single(await Events()).Title);
+    }
+
+    [Fact]
+    public async Task Moving_an_event_keeps_its_title_and_bumps_its_version()
+    {
+        var created = (await _db.EventService().CreateEventAsync(_owner, _teamId, NewEvent("", Pracc()))).Data!;
+        var moved = NewEvent("", Pracc(), created.StartTime.AddDays(1));
+        moved.Version = created.Version;
+
+        var result = await _db.EventService().UpdateEventAsync(_officer, _teamId, created.Id, moved);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Equal(created.Version + 1, result.Data!.Version);
+        Assert.Equal(created.StartTime.AddDays(1), Assert.Single(await Events()).StartTime);
+        Assert.Equal(string.Empty, result.Data.Title);
+    }
+
     private int Pracc() => _db.TypeId(_teamId, EventTypePreset.Pracc);
 
     private static SaveTeamOffDayDto OffDayTimes() => new() { StartTime = OffStart, EndTime = OffEnd };

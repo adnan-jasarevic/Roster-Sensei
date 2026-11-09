@@ -50,3 +50,7 @@ export const otherTypeOf = (types: TeamEventType[]) => types.find(t => t.isLocke
 
 /** Types an event can be given. Recorded Match only marks matches recorded on the Matches page. */
 export const pickableTypes = (types: TeamEventType[]) => types.filter(t => t.preset !== 'RecordedMatch');
+
+/** An event's title, or its type's name when it has no title of its own. */
+export const eventTitle = (title: string | null | undefined, type: Pick<TeamEventType, 'name'> | undefined) =>
+    title?.trim() || type?.name || 'Event';

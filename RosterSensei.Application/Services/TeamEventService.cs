@@ -136,7 +136,8 @@ public class TeamEventService : ITeamEventService
 
     private static void Apply(TeamEvent teamEvent, SaveTeamEventDto dto)
     {
-        teamEvent.Title = dto.Title.Trim();
+        // Left empty when no title was given; the calendar then shows the event type's current name.
+        teamEvent.Title = dto.Title?.Trim() ?? string.Empty;
         teamEvent.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
         teamEvent.StartTime = dto.StartTime;
         teamEvent.EndTime = dto.EndTime;
