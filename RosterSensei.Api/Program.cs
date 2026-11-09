@@ -34,7 +34,8 @@ builder.Services.AddCors(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddIdentity<AppUser, IdentityRole>()
+// Login and invites look users up by email, so two accounts must never share one.
+builder.Services.AddIdentity<AppUser, IdentityRole>(options => options.User.RequireUniqueEmail = true)
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
 
@@ -80,6 +81,10 @@ builder.Services.AddScoped<IMatchRepository, MatchRepository>();
 builder.Services.AddScoped<IMatchService, MatchService>();
 builder.Services.AddScoped<ITeamEventRepository, TeamEventRepository>();
 builder.Services.AddScoped<ITeamEventService, TeamEventService>();
+builder.Services.AddScoped<ITeamEventTypeRepository, TeamEventTypeRepository>();
+builder.Services.AddScoped<ITeamEventTypeService, TeamEventTypeService>();
+builder.Services.AddScoped<ITeamOffDayRepository, TeamOffDayRepository>();
+builder.Services.AddScoped<ITeamOffDayService, TeamOffDayService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 
