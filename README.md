@@ -34,6 +34,8 @@ A web app for amateur Counter-Strike 2 teams to manage their roster, schedule ma
 
 The backend follows Clean Architecture: dependencies point inward, so the domain knows nothing about the database or the web.
 
+Everything with a lifecycle (invites, roles and ownership, match status, the session, loading and saving in the UI) is listed with its states and rules in [docs/state-machines.md](docs/state-machines.md).
+
 ```
 RosterSensei.Domain            Entities and enums (Team, TeamMember, TeamInvite, Match, ...)
 RosterSensei.Application       DTOs, services, validators, repository interfaces

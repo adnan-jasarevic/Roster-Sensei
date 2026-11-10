@@ -406,6 +406,23 @@ export class MockApi {
             return { json: t.offDays };
         }
 
+        if ((m = path.match(/^\/teams\/(\d+)\/off-days\/(\d{4}-\d{2}-\d{2})$/i))) {
+            const t = this.findTeam(m[1]);
+            if (!t) return { status: 404, json: { message: 'Team not found.' } };
+            const date = m[2];
+            if (method === 'PUT') {
+                // Marking a day that is already off is not an error, as in the API.
+                const offDay: TeamOffDay = { date, startTime: body?.startTime, endTime: body?.endTime };
+                t.offDays = [...t.offDays.filter(d => d.date !== date), offDay];
+                return { json: offDay };
+            }
+            if (method === 'DELETE') {
+                if (!t.offDays.some(d => d.date === date)) return { status: 404, json: { message: "That day isn't an off day." } };
+                t.offDays = t.offDays.filter(d => d.date !== date);
+                return { json: { message: 'The day is no longer an off day.' } };
+            }
+        }
+
         return { status: 404, json: { message: `No mock for ${method} ${path}` } };
     }
 }

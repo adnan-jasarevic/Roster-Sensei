@@ -6,8 +6,8 @@ import Dashboard from './pages/dashboard';
 import TeamRoster from './pages/teamroster';
 import Matches from './pages/matches';
 import Account from './pages/account';
+import PrivateRoute, { SignedOutRoute } from './components/private-route';
 import MapPool from './pages/map-pool';
-import PrivateRoute from './components/private-route';
 import AppLayout from './components/app-layout';
 
 // Recharts and react-big-calendar are large, so these pages are only loaded when opened.
@@ -21,10 +21,10 @@ function App() {
     return (
         <BrowserRouter>
             <Routes>
-                {/* public routes */}
+                {/* public routes: a signed-in user is sent on to the dashboard */}
                 <Route path="/" element={<Navigate to="/login" replace />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
+                <Route path="/login" element={<SignedOutRoute><Login /></SignedOutRoute>} />
+                <Route path="/register" element={<SignedOutRoute><Register /></SignedOutRoute>} />
                 {UiKit && <Route path="/ui-kit" element={<Suspense><UiKit /></Suspense>} />}
 
                 {/* private routes */}

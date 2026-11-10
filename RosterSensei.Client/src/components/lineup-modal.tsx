@@ -1,7 +1,6 @@
 import { useCallback, useState, type FormEvent } from 'react';
-import axios from 'axios';
 import api from '../services/api';
-import { getApiErrorMessage } from '../services/errors';
+import { useAction } from '../hooks/use-action';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import {
     LINEUP_MAX_PLAYERS,
@@ -40,8 +39,8 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
     const [picks, setPicks] = useState<Pick[]>(() =>
         (match.lineup ?? []).map(entry => ({ userId: entry.userId, role: entry.role ?? '', played: entry.played })),
     );
-    const [error, setError] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
+    const save = useAction();
+    const isSaving = save.isRunning;
 
     const memberIds = new Set(members?.map(m => m.id));
     // Players in the saved lineup who have since left the team. The API only accepts current
@@ -65,7 +64,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
-        if (isSaving || !members) return;
+        if (!members) return;
 
         const body: SetLineupRequest = {
             players: currentPicks.map(p => ({
@@ -75,20 +74,14 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
             })),
         };
 
-        setIsSaving(true);
-        setError('');
-        try {
-            const response = await api.put<LineupEntry[]>(`/Matches/${teamId}/${match.id}/lineup`, body);
-            onSaved(response.data);
-        } catch (err) {
-            setError(getApiErrorMessage(err, 'Failed to save the lineup.'));
-            const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-            if (status === 404) onMatchMissing();
-            // A player who left in the meantime makes the API refuse the lineup: show the current roster.
-            if (status === 400) reload();
-        } finally {
-            setIsSaving(false);
+        const result = await save.run(() => api.put<LineupEntry[]>(`/Matches/${teamId}/${match.id}/lineup`, body), 'Failed to save the lineup.');
+        if (result.ok) {
+            onSaved(result.data.data);
+            return;
         }
+        if (result.httpStatus === 404) onMatchMissing();
+        // A player who left in the meantime makes the API refuse the lineup: show the current roster.
+        if (result.httpStatus === 400) reload();
     };
 
     const formId = `lineup-form-${match.id}`;
@@ -118,7 +111,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
                 <ErrorState compact title="Couldn't load the roster" message={membersError} onRetry={reload} retrying={isFetching} />
             ) : (
                 <form id={formId} onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    {error && <Alert tone="danger">{error}</Alert>}
+                    {save.error && <Alert tone="danger">{save.error}</Alert>}
                     {formerPlayers.length > 0 && (
                         <Alert tone="warning">
                             {formerPlayers.map(p => p.username).join(', ')} {formerPlayers.length === 1 ? 'is' : 'are'} no longer on the team and will be removed from this lineup when you save.

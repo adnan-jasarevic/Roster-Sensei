@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import api from '../services/api';
-import { getApiErrorMessage } from '../services/errors';
+import { useAction } from '../hooks/use-action';
 import { MAP_POOL } from '../constants/maps';
 import { MatchKind, MatchStatus, type CreateMatchRequest, type MatchKindValue, type MatchMap, type MatchStatusValue } from '../types';
 import { Alert, Button, Field, Input, Modal, SegmentedControl, Select, Textarea, ToggleChip } from './ui';
@@ -46,9 +46,9 @@ export default function AddMatchModal({ teamId, onClose, onCreated }: AddMatchMo
     const [mapScores, setMapScores] = useState<Record<string, MapScoreInput>>({});
     const [notes, setNotes] = useState('');
 
-    const [error, setError] = useState('');
+    const save = useAction();
+    const isSubmitting = save.isRunning;
     const [showFieldErrors, setShowFieldErrors] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const isFinished = status === MatchStatus.Finished;
     const hasMapScores = isFinished && maps.length > 0;
@@ -96,10 +96,10 @@ export default function AddMatchModal({ teamId, onClose, onCreated }: AddMatchMo
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        setError('');
 
         // The button stays enabled so pressing it can explain what's missing, right on the fields.
         if (!opponentName.trim() || !scheduledDate) {
+            save.reset();
             setShowFieldErrors(true);
             return;
         }
@@ -121,16 +121,10 @@ export default function AddMatchModal({ teamId, onClose, onCreated }: AddMatchMo
             notes: notes.trim() || undefined,
         };
 
-        setIsSubmitting(true);
-        try {
-            await api.post(`/Matches/${teamId}`, payload);
-            onCreated();
-            onClose();
-        } catch (err: unknown) {
-            setError(getApiErrorMessage(err, 'Failed to add the match.'));
-        } finally {
-            setIsSubmitting(false);
-        }
+        const result = await save.run(() => api.post(`/Matches/${teamId}`, payload), 'Failed to add the match.');
+        if (!result.ok) return;
+        onCreated();
+        onClose();
     };
 
     return (
@@ -148,7 +142,7 @@ export default function AddMatchModal({ teamId, onClose, onCreated }: AddMatchMo
             }
         >
             <form id="add-match-form" onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
-                {error && <Alert tone="danger">{error}</Alert>}
+                {save.error && <Alert tone="danger">{save.error}</Alert>}
 
                 <SegmentedControl label="Type" value={type} options={TYPE_OPTIONS} onChange={setType} />
 

@@ -6,11 +6,20 @@ export interface LoginResponse {
     token: string;
 }
 
+/**
+ * A member's role in a team, as the API names it. Matches TeamRole in RosterSensei.Domain.
+ * The Owner isn't a role: ownership is the separate `isOwner` flag, and the Owner has a role too.
+ */
+export type TeamRole = 'Captain' | 'Officer' | 'Player';
+
+/** Every role the Owner can give a member, in the order the role picker lists them. */
+export const TEAM_ROLES: readonly TeamRole[] = ['Player', 'Officer', 'Captain'];
+
 export interface Team {
     id: number;
     name: string;
     createdAt: string;
-    currentUserRole: string; // "Captain", "Officer" or "Player"
+    currentUserRole: TeamRole;
     isOwner: boolean; // The Owner also has one of the roles above.
 }
 
@@ -27,17 +36,31 @@ export interface MatchMap {
 /** Every endpoint sends match results in this exact form. */
 export type MatchOutcome = 'Win' | 'Loss' | 'Draw';
 
+/**
+ * Where a match is in its life, as responses name it. Matches MatchStatus in RosterSensei.Domain.
+ * Requests send the number instead: see the `MatchStatus` constant below.
+ *
+ * A match is created in one of these and stays there: the API has no endpoint that moves a match
+ * to another status yet.
+ */
+export type MatchStatusName = 'Scheduled' | 'Live' | 'Finished' | 'Cancelled';
+
+/** Official or scrim, as responses name it. Requests send the number: see `MatchKind` below. */
+export type MatchKindName = 'Official' | 'Scrim';
+
 export interface Match {
     id: number;
     opponentName: string;
     tournament?: string;
     scheduledDate: string;
     playedDate?: string;
-    status: string;
-    type: string;
+    status: MatchStatusName;
+    type: MatchKindName;
+    /** "0 - 0" until the match is finished: only show it when `hasResult` is true. */
     finalScore: string;
     bestOf?: number;
     maps: MatchMap[];
+    /** "Draw" until the match is finished: only show it when `hasResult` is true. */
     matchOutcome: MatchOutcome;
     notes?: string;
     /** Who was in the lineup, players who played first. Empty when it wasn't recorded. */
@@ -74,7 +97,7 @@ export interface MatchResponse {
     opponentName: string;
     scheduledDate: string;
     playedDate?: string;
-    status: string;
+    status: MatchStatusName;
     finalScore?: string;
     matchOutcome?: MatchOutcome;
 }
@@ -91,8 +114,8 @@ export interface TeamDashboardData {
 export interface TeamMember {
     id: string;
     email: string;
-    username: string; 
-    role: string; 
+    username: string;
+    role: TeamRole;
     isOwner: boolean;
     joinedAt: string;
     /** SteamID64 and profile link of the member's linked Steam account, or null. */
@@ -241,6 +264,21 @@ export const canManageTeam = (team?: Team) =>
 
 // How the user's place in a team is shown, for example "Owner, Captain".
 export const roleLabel = (team: Team) => team.isOwner ? `Owner, ${team.currentUserRole}` : team.currentUserRole;
+
+// Ownership can only be handed to an Officer. The API enforces the same rule.
+export const canReceiveOwnership = (member: TeamMember) => !member.isOwner && member.role === 'Officer';
+
+// The match was played, so its score and outcome mean something.
+export const hasResult = (match: Pick<Match, 'status'>) => match.status === 'Finished';
+
+// Scheduled for a time that hasn't come yet. The dashboard's "Upcoming" uses the same rule on the
+// server (TeamService.GetTeamDashboardAsync).
+export const isUpcoming = (match: Pick<Match, 'status' | 'scheduledDate'>, now: Date) =>
+    match.status === 'Scheduled' && new Date(match.scheduledDate) > now;
+
+// Still Scheduled although its time has passed: nobody has recorded what happened yet.
+export const needsResult = (match: Pick<Match, 'status' | 'scheduledDate'>, now: Date) =>
+    match.status === 'Scheduled' && new Date(match.scheduledDate) <= now;
 
 /** A side of a map. Matches MapSide in RosterSensei.Domain. */
 export type MapSide = 'T' | 'CT';

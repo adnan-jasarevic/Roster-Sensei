@@ -20,7 +20,7 @@ import {
     type ColumnVisibilityState,
     type SortingState,
 } from '@tanstack/react-table';
-import { type Match } from '../types';
+import { type Match, hasResult } from '../types';
 
 // One row per map. A match without maps still gets a single row so it shows up.
 export interface MapRow {
@@ -47,7 +47,7 @@ const half = (ours?: number | null, theirs?: number | null) => (ours == null || 
 
 export const toRows = (matches: Match[]): MapRow[] =>
     matches
-        .filter(m => m.status === 'Finished')
+        .filter(hasResult)
         .flatMap(match => {
             const base = {
                 date: new Date(match.playedDate ?? match.scheduledDate),

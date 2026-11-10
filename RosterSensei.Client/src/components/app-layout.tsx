@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CalendarDays, ChartNoAxesCombined, LayoutDashboard, LogOut, Map as MapIcon, Swords, UserRound, Users, type LucideIcon } from 'lucide-react';
 import api from '../services/api';
+import { signOut } from '../services/session';
 import { useResource } from '../hooks/use-resource';
 import { cx } from '../lib/cx';
 import { type Team } from '../types';
@@ -72,7 +73,7 @@ export default function AppLayout() {
     }, [pathname]);
 
     const handleLogout = () => {
-        localStorage.removeItem('jwt_token');
+        signOut();
         navigate('/login');
     };
 

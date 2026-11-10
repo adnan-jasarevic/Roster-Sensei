@@ -53,4 +53,26 @@ test.describe('logging in', () => {
         await expect(page).toHaveURL(/\/login$/);
         expect(await page.evaluate(() => localStorage.getItem('jwt_token'))).toBeNull();
     });
+
+    for (const path of ['/', '/login', '/register']) {
+        test(`a signed-in user who opens ${path} goes straight to the dashboard`, async ({ page, api }) => {
+            await api.install(page);
+            await page.goto(path);
+
+            await expect(page).toHaveURL(/\/dashboard$/);
+            await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+        });
+    }
+
+    test('after logging out, the login page stays put', async ({ page, api }) => {
+        await api.install(page);
+        await page.goto('/dashboard');
+        await page.getByRole('button', { name: 'Log out' }).first().click();
+        await expect(page).toHaveURL(/\/login$/);
+
+        await page.goto('/register');
+        await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible();
+        await page.goto('/login');
+        await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+    });
 });
