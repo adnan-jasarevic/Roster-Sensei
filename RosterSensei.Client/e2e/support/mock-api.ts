@@ -1,5 +1,5 @@
 import type { Page, Request, Route } from '@playwright/test';
-import type { LineupEntry, Match, SteamAccount, Team, TeamDashboardData, TeamEvent, TeamEventType, TeamInvite, TeamMember, TeamOffDay, TeamStats } from '../../src/types';
+import type { LineupEntry, MapPool, MapRating, MapSide, Match, SteamAccount, Team, TeamDashboardData, TeamEvent, TeamEventType, TeamInvite, TeamMember, TeamOffDay, TeamStats } from '../../src/types';
 
 type Role = 'Captain' | 'Officer' | 'Player';
 
@@ -14,7 +14,11 @@ export interface MockTeam {
     events: TeamEvent[];
     eventTypes: TeamEventType[];
     offDays: TeamOffDay[];
+    mapRatings: MapRating[];
 }
+
+/** The maps the API's map pool lists, in its order. */
+export const MAP_POOL_MAPS = ['Ancient', 'Anubis', 'Dust2', 'Inferno', 'Mirage', 'Nuke', 'Overpass', 'Train', 'Vertigo'];
 
 /** The premade types a new team starts with, ids 1-5 (Other is 5). */
 export function defaultEventTypes(): TeamEventType[] {
@@ -81,6 +85,7 @@ export function team(id: number, name: string, role: Role = 'Captain', isOwner =
         events: [],
         eventTypes: defaultEventTypes(),
         offDays: [],
+        mapRatings: [],
         ...extra,
     };
 }
@@ -303,6 +308,37 @@ export class MockApi {
                 .sort((a, b) => Number(b.played) - Number(a.played));
             target.lineup = lineup;
             return { json: lineup };
+        }
+
+        if ((m = path.match(/^\/teams\/(\d+)\/map-pool$/i)) && method === 'GET') {
+            const t = this.findTeam(m[1]);
+            if (!t) return { status: 403, json: { message: "You don't have access to the map pool of this team." } };
+            const pool: MapPool = {
+                maps: MAP_POOL_MAPS,
+                players: t.members.map(x => ({ userId: x.id, username: x.username })),
+                currentUserId: ME.id,
+                ratings: t.mapRatings,
+            };
+            return { json: pool };
+        }
+
+        // Like the API, the rating written is always the signed-in user's own.
+        if ((m = path.match(/^\/teams\/(\d+)\/map-pool\/([^/]+)\/([^/]+)$/i)) && (method === 'PUT' || method === 'DELETE')) {
+            const t = this.findTeam(m[1]);
+            if (!t) return { status: 403, json: { message: "You don't have access to the map pool of this team." } };
+            const side = m[2].toUpperCase() as MapSide;
+            const mapName = MAP_POOL_MAPS.find(x => x.toLowerCase() === decodeURIComponent(m![3]).toLowerCase());
+            if ((side !== 'T' && side !== 'CT') || !mapName) return { status: 404, json: { message: "That map isn't in the map pool." } };
+            const rating = Number(body?.rating);
+            if (method === 'PUT' && (!(rating >= 1 && rating <= 10) || Math.round(rating * 10) !== rating * 10)) {
+                return { status: 400, json: { errors: { Rating: ['A rating must be from 1 to 10.'] } } };
+            }
+            const isCell = (r: MapRating) => r.userId === ME.id && r.side === side && r.mapName === mapName;
+            t.mapRatings = t.mapRatings.filter(r => !isCell(r));
+            if (method === 'DELETE') return { json: { message: 'Rating cleared.' } };
+            const saved: MapRating = { userId: ME.id, mapName, side, rating };
+            t.mapRatings.push(saved);
+            return { json: saved };
         }
 
         if (path === '/Account/steam') {
