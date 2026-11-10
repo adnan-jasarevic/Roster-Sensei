@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import api from '../services/api';
 import { getApiErrorMessage } from '../services/errors';
+import { useAction } from '../hooks/use-action';
 import AuthLayout from '../components/auth-layout';
 import { Alert, Button, Field, Input, PasswordInput } from '../components/ui';
 
@@ -41,10 +42,10 @@ export default function Register() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
 
-    const [error, setError] = useState('');
+    const register = useAction();
     const [mismatch, setMismatch] = useState(false);
+    // Set once the account exists. The form is replaced by this message until the redirect.
     const [successMessage, setSuccessMessage] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // The timer is cleared if the user leaves first, so it can't pull them back to the login page.
     useEffect(() => {
@@ -55,24 +56,19 @@ export default function Register() {
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
 
         if (password !== confirmPassword) {
+            register.reset();
             setMismatch(true);
             return;
         }
         setMismatch(false);
-        setIsSubmitting(true);
 
         const payload: RegisterRequest = { username, email, password };
 
-        try {
-            const response = await api.post<RegisterResponse>('/Auth/register', payload);
-            setSuccessMessage(`${response.data?.message?.replace(/\.$/, '') || 'Account created'}. Redirecting to login...`);
-        } catch (err: unknown) {
-            setError(registerErrorMessage(err));
-        } finally {
-            setIsSubmitting(false);
+        const result = await register.run(() => api.post<RegisterResponse>('/Auth/register', payload), registerErrorMessage);
+        if (result.ok) {
+            setSuccessMessage(`${result.data.data?.message?.replace(/\.$/, '') || 'Account created'}. Redirecting to login...`);
         }
     };
 
@@ -86,7 +82,7 @@ export default function Register() {
                 <Alert tone="success">{successMessage}</Alert>
             ) : (
                 <form onSubmit={handleRegister} className="flex flex-col gap-4">
-                    {error && <Alert tone="danger">{error}</Alert>}
+                    {register.error && <Alert tone="danger">{register.error}</Alert>}
 
                     <Field label="Username">
                         <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Your nickname" autoComplete="username" required />
@@ -104,7 +100,7 @@ export default function Register() {
                         <PasswordInput value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" required />
                     </Field>
 
-                    <Button type="submit" size="lg" fullWidth loading={isSubmitting} loadingText="Creating account..." className="mt-2">
+                    <Button type="submit" size="lg" fullWidth loading={register.isRunning} loadingText="Creating account..." className="mt-2">
                         Register
                     </Button>
                 </form>

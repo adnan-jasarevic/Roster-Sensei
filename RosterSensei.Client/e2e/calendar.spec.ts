@@ -146,4 +146,48 @@ test.describe('calendar', () => {
         expect(api.requestsTo('PUT', /^\/teams\/1\/events\/7$/)).toHaveLength(0);
         await expect(dayColumn(page, 2).locator('.rbc-event')).toHaveCount(1);
     });
+
+    test('marking an off day from the new event dialog blocks the dialog until it is saved', async ({ page, api }) => {
+        const mark = api.hold('PUT', /^\/teams\/1\/off-days\//);
+        await api.install(page);
+        await openCalendar(page);
+
+        // "Add event" starts on the next full hour: Wednesday 11 November, 11:00.
+        await page.getByRole('button', { name: 'Add event' }).click();
+        const dialog = page.getByRole('dialog', { name: 'New event' });
+        await dialog.getByRole('button', { name: 'Make it an off day' }).click();
+        await mark.requested;
+
+        // While the day is being marked, nothing else in the dialog can start and it can't be closed.
+        await expect(dialog.getByRole('button', { name: 'Add event' })).toBeDisabled();
+        await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+        await dialog.getByRole('button', { name: 'Saving...' }).click({ force: true });
+        await page.keyboard.press('Escape');
+        await expect(dialog).toBeVisible();
+
+        mark.release();
+        await expect(dialog).toBeHidden();
+        await expect(page.getByText('Wednesday 11 November is now an off day.')).toBeVisible();
+        expect(api.requestsTo('PUT', /^\/teams\/1\/off-days\/2026-11-11$/)).toHaveLength(1);
+        expect(api.requestsTo('POST', /^\/teams\/1\/events$/)).toHaveLength(0);
+    });
+
+    test('an off day that could not be marked is explained inside the dialog', async ({ page, api }) => {
+        const stopFailing = api.fail('PUT', /^\/teams\/1\/off-days\//, 403, 'Only the team Owner, Captain or Officers can change off days.');
+        await api.install(page);
+        await openCalendar(page);
+
+        await page.getByRole('button', { name: 'Add event' }).click();
+        const dialog = page.getByRole('dialog', { name: 'New event' });
+        await dialog.getByRole('button', { name: 'Make it an off day' }).click();
+
+        // The reason is inside the dialog, not in a toast behind it, and the dialog stays usable.
+        await expect(dialog.getByRole('alert')).toHaveText('Only the team Owner, Captain or Officers can change off days.');
+        await expect(dialog.getByRole('button', { name: 'Add event' })).toBeEnabled();
+
+        stopFailing();
+        await dialog.getByRole('button', { name: 'Make it an off day' }).click();
+        await expect(dialog).toBeHidden();
+        await expect(page.getByText('Wednesday 11 November is now an off day.')).toBeVisible();
+    });
 });

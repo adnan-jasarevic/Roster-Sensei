@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import axios from 'axios';
 import { ExternalLink, Gamepad2, Link2, Unlink } from 'lucide-react';
 import api from '../services/api';
-import { getApiErrorMessage } from '../services/errors';
+import { useAction } from '../hooks/use-action';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { type SteamAccount } from '../types';
 import PageHeader, { PageContainer } from '../components/page-header';
@@ -33,64 +32,54 @@ function SteamAccountCard() {
     const account = saved ?? data;
     const isLinked = !!account?.steamId;
 
+    // The change form and the unlink confirmation are independent: the confirmation opens over the
+    // form, and cancelling it leaves the form as it was. So these stay two flags, not one state.
     const [isEditing, setIsEditing] = useState(false);
-    const [input, setInput] = useState('');
-    const [fieldError, setFieldError] = useState('');
-    const [formError, setFormError] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-
     const [isUnlinkOpen, setIsUnlinkOpen] = useState(false);
-    const [unlinkError, setUnlinkError] = useState('');
-    const [isUnlinking, setIsUnlinking] = useState(false);
+
+    const [input, setInput] = useState('');
+    // A problem with what was typed, shown on the field. Any other failure is `link.error`.
+    const [fieldError, setFieldError] = useState('');
+    const link = useAction();
+    const unlink = useAction();
 
     const showForm = !isLinked || isEditing;
 
     const startEditing = () => {
         setInput('');
         setFieldError('');
-        setFormError('');
+        link.reset();
         setIsEditing(true);
     };
 
     const handleLink = async (event: FormEvent) => {
         event.preventDefault();
         const value = input.trim();
-        if (!value || isSaving) return;
+        if (!value) return;
 
-        setIsSaving(true);
         setFieldError('');
-        setFormError('');
-        try {
-            const response = await api.put<SteamAccount>('/Account/steam', { steam: value });
-            setSaved(response.data);
+        const result = await link.run(() => api.put<SteamAccount>('/Account/steam', { steam: value }), 'Failed to link your Steam account.');
+        if (result.ok) {
+            setSaved(result.data.data);
             setIsEditing(false);
             setInput('');
             toast.success('Steam account linked.');
-        } catch (err) {
-            const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-            const message = getApiErrorMessage(err, 'Failed to link your Steam account.');
-            // A 400 is about what was typed, so it goes on the field. A 409 means another user has it.
-            if (status === 400) setFieldError(message);
-            else setFormError(message);
-        } finally {
-            setIsSaving(false);
+            return;
+        }
+        // A 400 is about what was typed, so it goes on the field. A 409 means another user has it.
+        if (result.httpStatus === 400) {
+            setFieldError(result.message);
+            link.reset();
         }
     };
 
     const handleUnlink = async () => {
-        setIsUnlinking(true);
-        setUnlinkError('');
-        try {
-            await api.delete('/Account/steam');
-            setSaved({ steamId: null, profileUrl: null });
-            setIsUnlinkOpen(false);
-            setIsEditing(false);
-            toast.success('Steam account unlinked.');
-        } catch (err) {
-            setUnlinkError(getApiErrorMessage(err, 'Failed to unlink your Steam account.'));
-        } finally {
-            setIsUnlinking(false);
-        }
+        const result = await unlink.run(() => api.delete('/Account/steam'), 'Failed to unlink your Steam account.');
+        if (!result.ok) return;
+        setSaved({ steamId: null, profileUrl: null });
+        setIsUnlinkOpen(false);
+        setIsEditing(false);
+        toast.success('Steam account unlinked.');
     };
 
     return (
@@ -139,7 +128,7 @@ function SteamAccountCard() {
                                     <Button
                                         size="sm"
                                         variant="ghost"
-                                        onClick={() => { setUnlinkError(''); setIsUnlinkOpen(true); }}
+                                        onClick={() => { unlink.reset(); setIsUnlinkOpen(true); }}
                                         leftIcon={<Unlink className="size-4" aria-hidden="true" />}
                                     >
                                         Unlink
@@ -150,7 +139,7 @@ function SteamAccountCard() {
 
                         {showForm && (
                             <form onSubmit={handleLink} className="flex flex-col gap-3" aria-label={isLinked ? 'Change Steam account' : 'Link Steam account'}>
-                                {formError && <Alert tone="danger">{formError}</Alert>}
+                                {link.error && <Alert tone="danger">{link.error}</Alert>}
                                 <Field label={isLinked ? 'New Steam profile or ID' : 'Steam profile or ID'} hint={FORMAT_HINT} error={fieldError || undefined}>
                                     <Input
                                         value={input}
@@ -163,11 +152,11 @@ function SteamAccountCard() {
                                     />
                                 </Field>
                                 <div className="flex flex-wrap gap-2">
-                                    <Button type="submit" disabled={!input.trim()} loading={isSaving} loadingText="Linking..." leftIcon={<Link2 className="size-4" aria-hidden="true" />}>
+                                    <Button type="submit" disabled={!input.trim()} loading={link.isRunning} loadingText="Linking..." leftIcon={<Link2 className="size-4" aria-hidden="true" />}>
                                         {isLinked ? 'Save Steam account' : 'Link Steam account'}
                                     </Button>
                                     {isEditing && (
-                                        <Button variant="ghost" onClick={() => setIsEditing(false)} disabled={isSaving}>Cancel</Button>
+                                        <Button variant="ghost" onClick={() => setIsEditing(false)} disabled={link.isRunning}>Cancel</Button>
                                     )}
                                 </div>
                             </form>
@@ -183,8 +172,8 @@ function SteamAccountCard() {
                 title="Unlink Steam account"
                 confirmLabel="Unlink"
                 busyLabel="Unlinking..."
-                busy={isUnlinking}
-                error={unlinkError}
+                busy={unlink.isRunning}
+                error={unlink.error}
             >
                 Your Steam profile will no longer show on your teams' rosters. You can link it again at any time.
             </ConfirmDialog>

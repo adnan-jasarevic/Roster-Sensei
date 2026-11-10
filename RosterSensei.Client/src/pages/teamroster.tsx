@@ -1,9 +1,9 @@
 ﻿import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowRightLeft, EllipsisVertical, Gamepad2, LogOut, MailPlus, Shield, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
 import api from '../services/api';
-import { getApiErrorMessage } from '../services/errors';
+import { useAction } from '../hooks/use-action';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
-import { type Team, type TeamMember, canManageTeam } from '../types';
+import { TEAM_ROLES, type Team, type TeamMember, type TeamRole, canManageTeam, canReceiveOwnership } from '../types';
 import { OwnerBadge, RoleBadge } from '../components/domain-badges';
 import { useLayoutContext } from '../components/layout-context';
 import PageHeader, { PageContainer } from '../components/page-header';
@@ -30,10 +30,20 @@ import {
     useToast,
 } from '../components/ui';
 
-type MemberAction = { type: 'kick' | 'role' | 'transfer'; member: TeamMember } | null;
-type TeamAction = 'leave' | 'delete' | null;
+/**
+ * The dialog on screen. Only one can be open at a time, and each kind carries exactly what it
+ * needs, so there is no "kick dialog without a member" to guard against.
+ */
+type Dialog =
+    | { kind: 'none' }
+    | { kind: 'invite' }
+    | { kind: 'role'; member: TeamMember; newRole: TeamRole }
+    | { kind: 'transfer'; member: TeamMember }
+    | { kind: 'kick'; member: TeamMember }
+    | { kind: 'leave' }
+    | { kind: 'delete' };
 
-const ASSIGNABLE_ROLES = ['Player', 'Officer', 'Captain'];
+const NO_DIALOG: Dialog = { kind: 'none' };
 
 export default function TeamRoster() {
     return (
@@ -53,12 +63,9 @@ function RosterContent({ team }: { team: Team }) {
     );
     const { data: members, error, isLoading, isFetching, reload } = useResource(load, 'Failed to load team members.');
 
-    const [isInviteOpen, setIsInviteOpen] = useState(false);
-    const [action, setAction] = useState<MemberAction>(null);
-    const [teamAction, setTeamAction] = useState<TeamAction>(null);
-    const [newRole, setNewRole] = useState('Player');
-    const [actionError, setActionError] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [dialog, setDialog] = useState<Dialog>(NO_DIALOG);
+    // The request of whichever confirmation or role dialog is open. The invite dialog keeps its own.
+    const action = useAction();
 
     const isOwner = team.isOwner;
     const canInvite = canManageTeam(team);
@@ -72,28 +79,22 @@ function RosterContent({ team }: { team: Team }) {
         if (document.activeElement === document.body) document.getElementById('main')?.focus({ preventScroll: true });
     }, [members]);
 
-    const openAction = (next: NonNullable<MemberAction>) => {
-        setActionError('');
-        setNewRole(next.member.role);
-        setAction(next);
+    // Opening a dialog forgets the failure of the one before it.
+    const openDialog = (next: Dialog) => {
+        action.reset();
+        setDialog(next);
     };
 
-    const closeAction = () => setAction(null);
+    const closeDialog = () => setDialog(NO_DIALOG);
 
+    // A change to one member: on success the list refreshes and the dialog closes.
     const runAction = async (request: () => Promise<unknown>, successMessage: string, failureMessage: string, onDone?: () => void) => {
-        setIsSubmitting(true);
-        setActionError('');
-        try {
-            await request();
-            toast.success(successMessage);
-            reload();
-            onDone?.();
-            closeAction();
-        } catch (err) {
-            setActionError(getApiErrorMessage(err, failureMessage));
-        } finally {
-            setIsSubmitting(false);
-        }
+        const result = await action.run(request, failureMessage);
+        if (!result.ok) return;
+        toast.success(successMessage);
+        reload();
+        onDone?.();
+        closeDialog();
     };
 
     const executeKick = (member: TeamMember) => runAction(
@@ -103,32 +104,20 @@ function RosterContent({ team }: { team: Team }) {
         () => { awaitingRemoval.current = true; },
     );
 
-    const executeRoleChange = (member: TeamMember) => runAction(
+    const executeRoleChange = (member: TeamMember, newRole: TeamRole) => runAction(
         () => api.put(`/Teams/${team.id}/members/${member.id}/role`, { newRole }),
         `${member.username} is now ${newRole === 'Officer' ? 'an' : 'a'} ${newRole}.`,
         'Failed to change role.',
         member.isOwner ? reloadTeams : undefined, // The Owner changed their own role.
     );
 
-    const openTeamAction = (next: NonNullable<TeamAction>) => {
-        setActionError('');
-        setTeamAction(next);
-    };
-
     // Leaving or deleting removes the team from the list; the layout then falls back to another team or the empty state.
     const runTeamAction = async (request: () => Promise<{ data: { message: string } }>, failureMessage: string) => {
-        setIsSubmitting(true);
-        setActionError('');
-        try {
-            const response = await request();
-            toast.success(response.data.message);
-            setTeamAction(null);
-            reloadTeams();
-        } catch (err) {
-            setActionError(getApiErrorMessage(err, failureMessage));
-        } finally {
-            setIsSubmitting(false);
-        }
+        const result = await action.run(request, failureMessage);
+        if (!result.ok) return;
+        toast.success(result.data.data.message);
+        closeDialog();
+        reloadTeams();
     };
 
     const executeLeaveTeam = () => runTeamAction(
@@ -154,7 +143,7 @@ function RosterContent({ team }: { team: Team }) {
                 title="Team roster"
                 description="Manage your players and roles."
                 actions={canInvite && (
-                    <Button onClick={() => setIsInviteOpen(true)} leftIcon={<UserPlus className="size-4" aria-hidden="true" />}>Invite player</Button>
+                    <Button onClick={() => openDialog({ kind: 'invite' })} leftIcon={<UserPlus className="size-4" aria-hidden="true" />}>Invite player</Button>
                 )}
             />
 
@@ -226,19 +215,19 @@ function RosterContent({ team }: { team: Team }) {
                                                     <IconButton {...trigger} size="sm" label={`Actions for ${member.username}`} icon={<EllipsisVertical className="size-5" aria-hidden="true" />} />
                                                 )}
                                             >
-                                                <MenuItem icon={<Shield />} onSelect={() => openAction({ type: 'role', member })}>Change role</MenuItem>
+                                                <MenuItem icon={<Shield />} onSelect={() => openDialog({ kind: 'role', member, newRole: member.role })}>Change role</MenuItem>
                                                 {/* The Owner can change their own role, but can't transfer to or kick themselves. */}
                                                 {!member.isOwner && (<>
                                                 <MenuItem
                                                     icon={<ArrowRightLeft />}
-                                                    disabled={member.role !== 'Officer'}
-                                                    hint={member.role !== 'Officer' ? 'Make them an Officer first' : undefined}
-                                                    onSelect={() => openAction({ type: 'transfer', member })}
+                                                    disabled={!canReceiveOwnership(member)}
+                                                    hint={canReceiveOwnership(member) ? undefined : 'Make them an Officer first'}
+                                                    onSelect={() => openDialog({ kind: 'transfer', member })}
                                                 >
                                                     Transfer ownership
                                                 </MenuItem>
                                                 <MenuSeparator />
-                                                <MenuItem icon={<UserMinus />} tone="danger" onSelect={() => openAction({ type: 'kick', member })}>Kick player</MenuItem>
+                                                <MenuItem icon={<UserMinus />} tone="danger" onSelect={() => openDialog({ kind: 'kick', member })}>Kick player</MenuItem>
                                                 </>)}
                                             </Menu>
                                         )}
@@ -265,7 +254,7 @@ function RosterContent({ team }: { team: Team }) {
                         <Button
                             variant="secondary"
                             className="shrink-0"
-                            onClick={() => openTeamAction('leave')}
+                            onClick={() => openDialog({ kind: 'leave' })}
                             disabled={isOwner}
                             title={isOwner ? 'Transfer ownership or delete the team first' : undefined}
                             leftIcon={<LogOut className="size-4" aria-hidden="true" />}
@@ -282,7 +271,7 @@ function RosterContent({ team }: { team: Team }) {
                             <Button
                                 variant="danger"
                                 className="shrink-0"
-                                onClick={() => openTeamAction('delete')}
+                                onClick={() => openDialog({ kind: 'delete' })}
                                 leftIcon={<Trash2 className="size-4" aria-hidden="true" />}
                             >
                                 Delete team
@@ -292,95 +281,107 @@ function RosterContent({ team }: { team: Team }) {
                 </div>
             </Card>
 
-            <InviteDialog
-                open={isInviteOpen}
-                teamId={team.id}
-                onClose={() => setIsInviteOpen(false)}
-                onInvited={email => {
-                    toast.success(`Invite sent to ${email}.`);
-                    reload();
-                }}
-            />
+            {/* Each dialog is mounted only while it is the open one, so it always starts clean. */}
+            {dialog.kind === 'invite' && (
+                <InviteDialog
+                    teamId={team.id}
+                    onClose={closeDialog}
+                    onInvited={email => {
+                        toast.success(`Invite sent to ${email}.`);
+                        reload();
+                    }}
+                />
+            )}
 
-            <ConfirmDialog
-                open={action?.type === 'kick'}
-                onClose={closeAction}
-                onConfirm={() => action && executeKick(action.member)}
-                title="Kick player"
-                confirmLabel="Kick player"
-                busyLabel="Removing..."
-                busy={isSubmitting}
-                error={actionError}
-            >
-                Remove <strong className="text-fg">{action?.member.username}</strong> from the team? They will lose access to team data.
-            </ConfirmDialog>
+            {dialog.kind === 'kick' && (
+                <ConfirmDialog
+                    open
+                    onClose={closeDialog}
+                    onConfirm={() => executeKick(dialog.member)}
+                    title="Kick player"
+                    confirmLabel="Kick player"
+                    busyLabel="Removing..."
+                    busy={action.isRunning}
+                    error={action.error}
+                >
+                    Remove <strong className="text-fg">{dialog.member.username}</strong> from the team? They will lose access to team data.
+                </ConfirmDialog>
+            )}
 
-            <ConfirmDialog
-                open={action?.type === 'transfer'}
-                onClose={closeAction}
-                onConfirm={() => action && executeTransfer(action.member)}
-                title="Transfer ownership"
-                confirmLabel="Transfer"
-                busyLabel="Transferring..."
-                busy={isSubmitting}
-                error={actionError}
-                confirmationText="CONFIRM"
-            >
-                You are about to transfer full team ownership to <strong className="text-fg">{action?.member.username}</strong>. You keep your role ({team.currentUserRole}) but lose Owner privileges, including managing roles and the roster.
-            </ConfirmDialog>
+            {dialog.kind === 'transfer' && (
+                <ConfirmDialog
+                    open
+                    onClose={closeDialog}
+                    onConfirm={() => executeTransfer(dialog.member)}
+                    title="Transfer ownership"
+                    confirmLabel="Transfer"
+                    busyLabel="Transferring..."
+                    busy={action.isRunning}
+                    error={action.error}
+                    confirmationText="CONFIRM"
+                >
+                    You are about to transfer full team ownership to <strong className="text-fg">{dialog.member.username}</strong>. You keep your role ({team.currentUserRole}) but lose Owner privileges, including managing roles and the roster.
+                </ConfirmDialog>
+            )}
 
-            <ConfirmDialog
-                open={teamAction === 'leave'}
-                onClose={() => setTeamAction(null)}
-                onConfirm={executeLeaveTeam}
-                title="Leave team"
-                confirmLabel="Leave team"
-                busyLabel="Leaving..."
-                busy={isSubmitting}
-                error={actionError}
-            >
-                Are you sure you want to leave <strong className="text-fg">{team.name}</strong>? You will need a new invite to rejoin.
-            </ConfirmDialog>
+            {dialog.kind === 'leave' && (
+                <ConfirmDialog
+                    open
+                    onClose={closeDialog}
+                    onConfirm={executeLeaveTeam}
+                    title="Leave team"
+                    confirmLabel="Leave team"
+                    busyLabel="Leaving..."
+                    busy={action.isRunning}
+                    error={action.error}
+                >
+                    Are you sure you want to leave <strong className="text-fg">{team.name}</strong>? You will need a new invite to rejoin.
+                </ConfirmDialog>
+            )}
 
-            <ConfirmDialog
-                open={teamAction === 'delete'}
-                onClose={() => setTeamAction(null)}
-                onConfirm={executeDeleteTeam}
-                title="Delete team"
-                confirmLabel="Delete team"
-                busyLabel="Deleting..."
-                busy={isSubmitting}
-                error={actionError}
-                confirmationText={team.name}
-            >
-                This permanently deletes <strong className="text-fg">{team.name}</strong> with its roster, pending invites, matches and calendar events. This cannot be undone.
-            </ConfirmDialog>
+            {dialog.kind === 'delete' && (
+                <ConfirmDialog
+                    open
+                    onClose={closeDialog}
+                    onConfirm={executeDeleteTeam}
+                    title="Delete team"
+                    confirmLabel="Delete team"
+                    busyLabel="Deleting..."
+                    busy={action.isRunning}
+                    error={action.error}
+                    confirmationText={team.name}
+                >
+                    This permanently deletes <strong className="text-fg">{team.name}</strong> with its roster, pending invites, matches and calendar events. This cannot be undone.
+                </ConfirmDialog>
+            )}
 
-            <Modal
-                open={action?.type === 'role'}
-                onClose={closeAction}
-                title={`Change role: ${action?.member.username ?? ''}`}
-                size="sm"
-                busy={isSubmitting}
-                footer={
-                    <>
-                        <Button variant="ghost" onClick={closeAction} disabled={isSubmitting}>Cancel</Button>
-                        <Button onClick={() => action && executeRoleChange(action.member)} loading={isSubmitting} loadingText="Saving...">Save role</Button>
-                    </>
-                }
-            >
-                <div className="flex flex-col gap-4">
-                    {actionError && <Alert tone="danger">{actionError}</Alert>}
-                    <Field label="Role" hint="A team has one Captain and any number of Officers, who have the same rights as the Captain. The Owner keeps Owner rights whatever their role. Ownership can only be transferred to an Officer.">
-                        <Select
-                            value={newRole}
-                            onChange={setNewRole}
-                            options={ASSIGNABLE_ROLES.map(role => ({ value: role, label: role }))}
-                            data-autofocus
-                        />
-                    </Field>
-                </div>
-            </Modal>
+            {dialog.kind === 'role' && (
+                <Modal
+                    open
+                    onClose={closeDialog}
+                    title={`Change role: ${dialog.member.username}`}
+                    size="sm"
+                    busy={action.isRunning}
+                    footer={
+                        <>
+                            <Button variant="ghost" onClick={closeDialog} disabled={action.isRunning}>Cancel</Button>
+                            <Button onClick={() => executeRoleChange(dialog.member, dialog.newRole)} loading={action.isRunning} loadingText="Saving...">Save role</Button>
+                        </>
+                    }
+                >
+                    <div className="flex flex-col gap-4">
+                        {action.error && <Alert tone="danger">{action.error}</Alert>}
+                        <Field label="Role" hint="A team has one Captain and any number of Officers, who have the same rights as the Captain. The Owner keeps Owner rights whatever their role. Ownership can only be transferred to an Officer.">
+                            <Select
+                                value={dialog.newRole}
+                                onChange={newRole => setDialog({ ...dialog, newRole })}
+                                options={TEAM_ROLES.map(role => ({ value: role, label: role }))}
+                                data-autofocus
+                            />
+                        </Field>
+                    </div>
+                </Modal>
+            )}
         </PageContainer>
     );
 }
@@ -403,52 +404,39 @@ function RosterSkeleton() {
 }
 
 interface InviteDialogProps {
-    open: boolean;
     teamId: number;
     onClose: () => void;
     onInvited: (email: string) => void;
 }
 
-function InviteDialog({ open, teamId, onClose, onInvited }: InviteDialogProps) {
+// Mounted only while open, so the email and any error are gone the next time it opens.
+function InviteDialog({ teamId, onClose, onInvited }: InviteDialogProps) {
     const [email, setEmail] = useState('');
-    const [error, setError] = useState('');
-    const [isSending, setIsSending] = useState(false);
-
-    const close = () => {
-        setEmail('');
-        setError('');
-        onClose();
-    };
+    const send = useAction();
+    const isSending = send.isRunning;
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         const address = email.trim();
         if (!address) return;
 
-        setError('');
-        setIsSending(true);
-        try {
-            await api.post(`/Teams/${teamId}/members`, { userEmail: address });
-            onInvited(address);
-            close();
-        } catch (err) {
-            setError(getApiErrorMessage(err, 'Failed to invite this player.'));
-        } finally {
-            setIsSending(false);
-        }
+        const result = await send.run(() => api.post(`/Teams/${teamId}/members`, { userEmail: address }), 'Failed to invite this player.');
+        if (!result.ok) return;
+        onInvited(address);
+        onClose();
     };
 
     return (
         <Modal
-            open={open}
-            onClose={close}
+            open
+            onClose={onClose}
             title="Invite player"
             size="sm"
             busy={isSending}
             closeOnBackdrop={false}
             footer={
                 <>
-                    <Button variant="ghost" onClick={close} disabled={isSending}>Cancel</Button>
+                    <Button variant="ghost" onClick={onClose} disabled={isSending}>Cancel</Button>
                     <Button type="submit" form="invite-form" disabled={!email.trim()} loading={isSending} loadingText="Sending..." leftIcon={<MailPlus className="size-4" aria-hidden="true" />}>
                         Send invite
                     </Button>
@@ -456,7 +444,7 @@ function InviteDialog({ open, teamId, onClose, onInvited }: InviteDialogProps) {
             }
         >
             <form id="invite-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
-                {error && <Alert tone="danger">{error}</Alert>}
+                {send.error && <Alert tone="danger">{send.error}</Alert>}
                 <Field label="Email address" hint="They'll see the invite the next time they open Roster Sensei.">
                     <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="player@example.com" autoComplete="off" required data-autofocus />
                 </Field>

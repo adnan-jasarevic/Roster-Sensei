@@ -4,7 +4,7 @@ import api from '../services/api';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { cx } from '../lib/cx';
 import { formatDateTime } from '../lib/format';
-import { type LineupEntry, type Match, type MatchMap, type Team, canManageTeam } from '../types';
+import { type LineupEntry, type Match, type MatchMap, type Team, canManageTeam, hasResult, isUpcoming } from '../types';
 import AddMatchModal from '../components/add-match-modal';
 import LineupModal from '../components/lineup-modal';
 import { MatchStatusBadge, OutcomeBadge } from '../components/domain-badges';
@@ -14,6 +14,14 @@ import TeamGate from '../components/team-gate';
 import { Alert, Button, Card, EmptyState, ErrorState, SegmentedControl, useToast } from '../components/ui';
 
 type Filter = 'all' | 'upcoming' | 'results';
+
+/** The dialog on screen. Only one can be open at a time. */
+type Dialog =
+    | { kind: 'none' }
+    | { kind: 'addMatch' }
+    | { kind: 'lineup'; matchId: number };
+
+const NO_DIALOG: Dialog = { kind: 'none' };
 
 const FILTERS: { value: Filter; label: string }[] = [
     { value: 'all', label: 'All' },
@@ -52,17 +60,19 @@ function MatchesContent({ team }: { team: Team }) {
     );
     const { data: matches, error, isLoading, isFetching, reload } = useResource(load, 'Failed to load matches.');
     const [filter, setFilter] = useState<Filter>('all');
-    const [isAddMatchOpen, setIsAddMatchOpen] = useState(false);
-    const [lineupMatchId, setLineupMatchId] = useState<number | null>(null);
+    const [dialog, setDialog] = useState<Dialog>(NO_DIALOG);
+    const closeDialog = () => setDialog(NO_DIALOG);
+    const openAddMatch = () => setDialog({ kind: 'addMatch' });
     const canManageMatches = canManageTeam(team);
     const toast = useToast();
 
-    const lineupMatch = matches?.find(m => m.id === lineupMatchId);
+    // Looked up in the loaded list, so the lineup dialog closes by itself if its match is gone after a reload.
+    const lineupMatch = dialog.kind === 'lineup' ? matches?.find(m => m.id === dialog.matchId) : undefined;
 
     // The API returns matches newest first.
     const visibleMatches = (matches ?? []).filter(m => {
-        if (filter === 'upcoming') return m.status === 'Scheduled' || m.status === 'Live';
-        if (filter === 'results') return m.status === 'Finished';
+        if (filter === 'upcoming') return isUpcoming(m);
+        if (filter === 'results') return hasResult(m);
         return true;
     });
 
@@ -72,7 +82,7 @@ function MatchesContent({ team }: { team: Team }) {
                 title="Matches"
                 description="Every match your team has scheduled or played."
                 actions={canManageMatches && (
-                    <Button onClick={() => setIsAddMatchOpen(true)} leftIcon={<Swords className="size-4" aria-hidden="true" />}>Add match</Button>
+                    <Button onClick={openAddMatch} leftIcon={<Swords className="size-4" aria-hidden="true" />}>Add match</Button>
                 )}
             />
 
@@ -90,18 +100,18 @@ function MatchesContent({ team }: { team: Team }) {
                         icon={<CalendarPlus />}
                         title={EMPTY_TITLES[filter]}
                         description="Matches appear here once they've been added."
-                        action={canManageMatches ? <Button variant="secondary" onClick={() => setIsAddMatchOpen(true)}>Add a match</Button> : undefined}
+                        action={canManageMatches ? <Button variant="secondary" onClick={openAddMatch}>Add a match</Button> : undefined}
                     />
                 ) : (
                     <ul className="divide-y divide-line">
                         {visibleMatches.map(match => (
-                            <MatchRow key={match.id} match={match} onEditLineup={canManageMatches ? () => setLineupMatchId(match.id) : undefined} />
+                            <MatchRow key={match.id} match={match} onEditLineup={canManageMatches ? () => setDialog({ kind: 'lineup', matchId: match.id }) : undefined} />
                         ))}
                     </ul>
                 )}
             </Card>
 
-            {isAddMatchOpen && <AddMatchModal teamId={team.id} onClose={() => setIsAddMatchOpen(false)} onCreated={reload} />}
+            {dialog.kind === 'addMatch' && <AddMatchModal teamId={team.id} onClose={closeDialog} onCreated={reload} />}
 
             {/* Keyed by match, so opening another match never carries over picks from the last one. */}
             {lineupMatch && (
@@ -109,9 +119,9 @@ function MatchesContent({ team }: { team: Team }) {
                     key={lineupMatch.id}
                     teamId={team.id}
                     match={lineupMatch}
-                    onClose={() => setLineupMatchId(null)}
+                    onClose={closeDialog}
                     onSaved={() => {
-                        setLineupMatchId(null);
+                        closeDialog();
                         toast.success(`Lineup saved for the match vs ${lineupMatch.opponentName}.`);
                         reload();
                     }}
@@ -123,7 +133,7 @@ function MatchesContent({ team }: { team: Team }) {
 }
 
 function MatchRow({ match, onEditLineup }: { match: Match; onEditLineup?: () => void }) {
-    const isFinished = match.status === 'Finished';
+    const isFinished = hasResult(match);
     const lineup = match.lineup ?? [];
     const details = [
         formatDateTime(match.scheduledDate),

@@ -1,4 +1,5 @@
 ﻿import axios from 'axios';
+import { getToken, signOut } from './session';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7185/api';
 
@@ -10,7 +11,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('jwt_token');
+    const token = getToken();
     if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
     }
@@ -24,7 +25,7 @@ api.interceptors.response.use(
     (error) => {
         const isLoginRequest = error.config?.url?.includes('/Auth/login');
         if (error.response?.status === 401 && !isLoginRequest) {
-            localStorage.removeItem('jwt_token');
+            signOut();
             if (window.location.pathname !== '/login') {
                 window.location.assign('/login');
             }

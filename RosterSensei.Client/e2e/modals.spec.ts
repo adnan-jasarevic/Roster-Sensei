@@ -103,4 +103,38 @@ test.describe('modal focus', () => {
         await expect(kick).toBeHidden();
         expect(api.requestsTo('DELETE', /^\/Teams\/1\/members\//)).toHaveLength(0);
     });
+
+    test('a dialog opened after a failed one starts clean', async ({ page, api }) => {
+        api.fail('DELETE', /^\/Teams\/1\/members\/kenji$/, 400, 'The team changed while removing this player. Refresh and try again.');
+        api.fail('POST', /^\/Teams\/1\/members$/, 404, 'A user with this email does not exist. They must register first.');
+        await api.install(page);
+        await page.goto('/team');
+
+        // A failed kick shows its error in the kick dialog only.
+        await page.getByRole('button', { name: 'Actions for kenji' }).click();
+        await page.getByRole('menuitem', { name: 'Kick player' }).click();
+        const kick = page.getByRole('dialog', { name: 'Kick player' });
+        await kick.getByRole('button', { name: 'Kick player' }).click();
+        await expect(kick.getByRole('alert')).toHaveText('The team changed while removing this player. Refresh and try again.');
+        await kick.getByRole('button', { name: 'Cancel' }).click();
+
+        await page.getByRole('button', { name: 'Actions for mika' }).click();
+        await page.getByRole('menuitem', { name: 'Change role' }).click();
+        const role = page.getByRole('dialog', { name: 'Change role: mika' });
+        await expect(role).toBeVisible();
+        await expect(role.getByRole('alert')).toHaveCount(0);
+        await role.getByRole('button', { name: 'Cancel' }).click();
+
+        // The invite dialog forgets the email and the error from the last time it was open.
+        await page.getByRole('button', { name: 'Invite player' }).click();
+        const invite = page.getByRole('dialog', { name: 'Invite player' });
+        await invite.getByLabel('Email address').fill('ghost@example.com');
+        await invite.getByRole('button', { name: 'Send invite' }).click();
+        await expect(invite.getByRole('alert')).toHaveText('A user with this email does not exist. They must register first.');
+        await invite.getByRole('button', { name: 'Cancel' }).click();
+
+        await page.getByRole('button', { name: 'Invite player' }).click();
+        await expect(invite.getByLabel('Email address')).toHaveValue('');
+        await expect(invite.getByRole('alert')).toHaveCount(0);
+    });
 });

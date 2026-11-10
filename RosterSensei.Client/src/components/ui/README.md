@@ -11,6 +11,8 @@ src/
   styles/tokens.css     Colour, type and radius tokens for both themes. The only place colours live.
   theme/                ThemeProvider and useTheme(). Dark is the default.
   hooks/use-resource.ts Data loading: loading, error, retry, and protection from stale responses.
+  hooks/use-action.ts   One request started by the user: idle, running or failed.
+  services/session.ts   The signed-in session. The only code that touches the stored token.
   components/
     ui/                 Generic building blocks. They know nothing about teams or matches.
     brand/logo.tsx      The logo.
@@ -33,7 +35,11 @@ Dependencies only point downwards: pages use components, components use `ui/`, a
    free. Only build a custom widget when no native element does the job. `Select` is one: the popup
    of a native `<select>` can't be themed reliably.
 4. **Every view that loads data handles four states:** loading, error, empty and data.
-5. **Never put rays on the logo's sun.** The rayed sun flag is offensive in much of Asia.
+5. **Give each state one typed home.** A request the user starts is a `useAction`, not an
+   `isSaving` flag next to an `error` string. A page with several dialogs keeps one union saying
+   which is open. A status from the API is a union type, not `string`. The full list of the app's
+   state machines is in [`docs/state-machines.md`](../../../../docs/state-machines.md).
+6. **Never put rays on the logo's sun.** The rayed sun flag is offensive in much of Asia.
 
 ### Colour contrast
 
@@ -233,6 +239,59 @@ Always pass `signal` so a superseded request is cancelled, and wrap the loader i
 its identity is what tells the hook the request changed. A new function means new data, and `null`
 means wait. Add `{ keepPrevious: true }` for filters and date ranges, so the old data stays on
 screen while the new data loads.
+
+## Sending a request: useAction
+
+```tsx
+const save = useAction();
+
+const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    const result = await save.run(() => api.post(`/Matches/${team.id}`, payload), 'Failed to add the match.');
+    if (!result.ok) return;
+    onCreated();
+    onClose();
+};
+
+<Modal open onClose={onClose} title="Add match" busy={save.isRunning}>
+    {save.error && <Alert tone="danger">{save.error}</Alert>}
+</Modal>
+```
+
+`run` never throws. A second `run` while one is in flight is ignored, the last error is cleared
+when a new run starts, and `isRunning` always ends. The second argument is the message to show
+when the API gives none, or a function that reads the error. On failure the result has
+`httpStatus`, for reacting to a 404 or 409 (for example by reloading the list behind the dialog).
+Call `reset()` when a dialog opens again, so it doesn't show the failure from last time.
+
+A dialog with several requests uses one action for each and is busy while any of them runs:
+
+```tsx
+const isBusy = save.isRunning || remove.isRunning;
+```
+
+## Which dialog is open
+
+A page with more than one dialog keeps a single union instead of a flag for each. Only one can be
+open, and each kind carries what it needs:
+
+```tsx
+type Dialog =
+    | { kind: 'none' }
+    | { kind: 'invite' }
+    | { kind: 'kick'; member: TeamMember };
+
+const [dialog, setDialog] = useState<Dialog>({ kind: 'none' });
+
+{dialog.kind === 'kick' && (
+    <ConfirmDialog open onClose={close} onConfirm={() => kick(dialog.member)} title="Kick player" confirmLabel="Kick player">
+        Remove {dialog.member.username}?
+    </ConfirmDialog>
+)}
+```
+
+Mount a dialog only while it is the open one. Its fields and errors then start empty every time,
+with nothing to reset by hand.
 
 ## Building a team page
 

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import api from '../services/api';
-import { getApiErrorMessage } from '../services/errors';
+import { useAction } from '../hooks/use-action';
 import { type Team } from '../types';
 import { Alert, Button, Field, Input, Modal } from './ui';
 
@@ -11,23 +11,16 @@ interface CreateTeamModalProps {
 
 export default function CreateTeamModal({ onClose, onCreated }: CreateTeamModalProps) {
     const [name, setName] = useState('');
-    const [isCreating, setIsCreating] = useState(false);
-    const [error, setError] = useState('');
+    const create = useAction();
+    const isCreating = create.isRunning;
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        setIsCreating(true);
-        setError('');
-        try {
-            const response = await api.post<Team>('/Teams', { name: name.trim() });
-            onCreated(response.data);
-            onClose();
-        } catch (err) {
-            // For example the 3-team limit, or a name with characters that aren't allowed.
-            setError(getApiErrorMessage(err, 'Failed to create the team. Please try again.'));
-        } finally {
-            setIsCreating(false);
-        }
+        // Fails with, for example, the 3-team limit, or a name with characters that aren't allowed.
+        const result = await create.run(() => api.post<Team>('/Teams', { name: name.trim() }), 'Failed to create the team. Please try again.');
+        if (!result.ok) return;
+        onCreated(result.data.data);
+        onClose();
     };
 
     return (
@@ -46,7 +39,7 @@ export default function CreateTeamModal({ onClose, onCreated }: CreateTeamModalP
             }
         >
             <form id="create-team-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
-                {error && <Alert tone="danger">{error}</Alert>}
+                {create.error && <Alert tone="danger">{create.error}</Alert>}
                 <Field label="Team name">
                     <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Tokyo Ronin" maxLength={50} autoComplete="off" data-autofocus />
                 </Field>

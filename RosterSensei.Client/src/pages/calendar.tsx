@@ -9,6 +9,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import './calendar.css';
 import api from '../services/api';
+import { useAction } from '../hooks/use-action';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { cx } from '../lib/cx';
 import EventModal from '../components/event-modal';
@@ -18,7 +19,7 @@ import { getApiErrorMessage } from '../services/errors';
 import PageHeader, { PageContainer } from '../components/page-header';
 import TeamGate from '../components/team-gate';
 import { Alert, Button, Card, ErrorState, Modal, Skeleton, useToast } from '../components/ui';
-import { type Match, type Team, type SaveTeamEventRequest, type TeamEvent, type TeamEventType, type TeamEventTypes, type TeamOffDay, canManageTeam } from '../types';
+import { type Match, type Team, type SaveTeamEventRequest, type TeamEvent, type TeamEventType, type TeamEventTypes, type TeamOffDay, canManageTeam, hasResult } from '../types';
 
 // Weeks start on Monday.
 const localizer = dateFnsLocalizer({
@@ -193,7 +194,7 @@ function CalendarContent({ team }: { team: Team }) {
 
         const matchItems = matches.map(m => {
             const start = new Date(m.scheduledDate);
-            const score = m.status === 'Finished' ? ` (${m.finalScore})` : '';
+            const score = hasResult(m) ? ` (${m.finalScore})` : '';
             // Opening the match opens the event it replaced, so that event can still be edited or deleted.
             const replaced = events.find(e => replacedBy.get(e.id) === m);
             return {
@@ -214,19 +215,17 @@ function CalendarContent({ team }: { team: Team }) {
         if (item.event) setModal({ mode: 'open', event: item.event, cancelled: item.cancelled });
     }, []);
 
+    // Called from the new event dialog, which stays open and blocked while this runs and shows the
+    // reason if it fails. So the dialog closed here is always the one the request started from.
     const markOffDay = async (day: Date) => {
         const start = startOfDay(day);
-        try {
-            await api.put(`/teams/${team.id}/off-days/${dayKey(start)}`, {
-                startTime: start.toISOString(),
-                endTime: addDays(start, 1).toISOString(),
-            });
-            toast.success(`${format(start, 'EEEE d MMMM')} is now an off day.`);
-            setModal({ mode: 'closed' });
-            reload();
-        } catch (err: unknown) {
-            toast.error(getApiErrorMessage(err, 'Failed to mark the off day.'));
-        }
+        await api.put(`/teams/${team.id}/off-days/${dayKey(start)}`, {
+            startTime: start.toISOString(),
+            endTime: addDays(start, 1).toISOString(),
+        });
+        toast.success(`${format(start, 'EEEE d MMMM')} is now an off day.`);
+        setModal({ mode: 'closed' });
+        reload();
     };
 
     // Saves an event dragged (or resized) to new times. The save carries the version the event was
@@ -573,23 +572,19 @@ interface OffDayDialogProps {
 
 function OffDayDialog({ teamId, day, cancelledCount, onClose, onChanged }: OffDayDialogProps) {
     const toast = useToast();
-    const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState('');
+    const unmarkDay = useAction();
+    const isSaving = unmarkDay.isRunning;
+    const error = unmarkDay.error;
     const label = format(day, 'EEEE d MMMM');
 
     const unmark = async () => {
-        setError('');
-        setIsSaving(true);
-        try {
-            await api.delete(`/teams/${teamId}/off-days/${dayKey(day)}`);
-            toast.success(`${label} is a normal day again.`);
-            onChanged();
-            onClose();
-        } catch (err: unknown) {
-            setError(getApiErrorMessage(err, 'Failed to change the off day.'));
-            onChanged();
-            setIsSaving(false);
-        }
+        const result = await unmarkDay.run(() => api.delete(`/teams/${teamId}/off-days/${dayKey(day)}`), 'Failed to change the off day.');
+        if (!result.ok && result.ignored) return;
+        // Refreshed after a failure too: someone else may have made it a normal day already.
+        onChanged();
+        if (!result.ok) return;
+        toast.success(`${label} is a normal day again.`);
+        onClose();
     };
 
     return (

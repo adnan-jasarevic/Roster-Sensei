@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
 import { format } from 'date-fns';
 import { CalendarOff, Trash2 } from 'lucide-react';
 import api from '../services/api';
-import { getApiErrorMessage } from '../services/errors';
+import { useAction } from '../hooks/use-action';
 import { eventTitle, otherTypeOf, pickableTypes } from '../lib/event-types';
 import type { SaveTeamEventRequest, TeamEvent, TeamEventType } from '../types';
 import { Alert, Button, ConfirmDialog, Field, Input, Modal, SegmentedControl, Textarea } from './ui';
@@ -22,8 +21,9 @@ interface EventModalProps {
     canManage: boolean;
     onClose: () => void;
     onSaved: () => void;
-    // Offered instead of a new event: marks the day of the selected start as an off day.
-    onMarkOffDay?: (day: Date) => void;
+    // Offered instead of a new event: marks the day of the selected start as an off day and closes
+    // the dialog. Rejects when the day couldn't be marked; the dialog then shows why.
+    onMarkOffDay?: (day: Date) => Promise<void>;
 }
 
 // datetime-local wants "yyyy-MM-ddTHH:mm" in the user's local time.
@@ -46,12 +46,14 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
         const defaultStart = initialStart ?? new Date();
         return toInputValue(initialEnd ?? new Date(defaultStart.getTime() + 2 * 60 * 60 * 1000));
     });
-    const [error, setError] = useState('');
     const [showFieldErrors, setShowFieldErrors] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-    const [deleteError, setDeleteError] = useState('');
+    // The three requests this dialog can send. While any of them runs, the dialog can't be closed
+    // and none of the others can be started.
+    const save = useAction();
+    const remove = useAction();
+    const offDay = useAction();
+    const isBusy = save.isRunning || remove.isRunning || offDay.isRunning;
 
     const readOnly = !canManage;
     const selectedType = types.find(t => t.id === eventTypeId);
@@ -62,8 +64,9 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (readOnly) return;
-        setError('');
+        if (readOnly || isBusy) return;
+        save.reset();
+        offDay.reset();
 
         if (!start || !end || endError) {
             setShowFieldErrors(true);
@@ -80,36 +83,37 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
             eventTypeId,
         };
 
-        setIsSubmitting(true);
-        try {
+        const result = await save.run(async () => {
             if (event) await api.put(`/teams/${teamId}/events/${event.id}`, { ...payload, version: event.version });
             else await api.post(`/teams/${teamId}/events`, payload);
+        }, 'Failed to save the event.');
+        if (result.ok) {
             onSaved();
             onClose();
-        } catch (err: unknown) {
-            setError(getApiErrorMessage(err, 'Failed to save the event.'));
-            // Someone else saved a newer version, or deleted the event: refresh the calendar behind the dialog
-            // so reopening the event shows what is there now. The dialog stays open so nothing typed is lost.
-            const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-            if (status === 409 || status === 404) onSaved();
-        } finally {
-            setIsSubmitting(false);
+            return;
         }
+        // Someone else saved a newer version, or deleted the event: refresh the calendar behind the dialog
+        // so reopening the event shows what is there now. The dialog stays open so nothing typed is lost.
+        if (result.httpStatus === 409 || result.httpStatus === 404) onSaved();
     };
 
     const handleDelete = async () => {
         if (!event) return;
-        setDeleteError('');
-        setIsDeleting(true);
-        try {
-            await api.delete(`/teams/${teamId}/events/${event.id}`);
-            onSaved();
-            onClose();
-        } catch (err: unknown) {
-            setDeleteError(getApiErrorMessage(err, 'Failed to delete the event.'));
-            setIsDeleting(false);
-        }
+        const result = await remove.run(() => api.delete(`/teams/${teamId}/events/${event.id}`), 'Failed to delete the event.');
+        if (!result.ok) return;
+        onSaved();
+        onClose();
     };
+
+    // The calendar marks the day and closes this dialog. If that fails, the reason is shown here,
+    // inside the dialog, where a toast behind the backdrop could be missed.
+    const handleMarkOffDay = () => {
+        if (!onMarkOffDay || isBusy) return;
+        save.reset();
+        void offDay.run(() => onMarkOffDay(new Date(start || Date.now())), 'Failed to mark the off day.');
+    };
+
+    const error = save.error ?? offDay.error;
 
     // Times the event would take, or null while they're incomplete or the wrong way round.
     const range = start && end && !endError ? { from: new Date(start), to: new Date(end) } : null;
@@ -134,7 +138,7 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
             open
             onClose={onClose}
             title={heading}
-            busy={isSubmitting || isDeleting}
+            busy={isBusy}
             closeOnBackdrop={readOnly}
             footer={readOnly ? (
                 <Button variant="secondary" onClick={onClose}>Close</Button>
@@ -144,8 +148,10 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
                         <Button
                             variant="ghost"
                             className="mr-auto"
-                            onClick={() => onMarkOffDay(new Date(start || Date.now()))}
-                            disabled={isSubmitting}
+                            onClick={handleMarkOffDay}
+                            disabled={save.isRunning}
+                            loading={offDay.isRunning}
+                            loadingText="Saving..."
                             leftIcon={<CalendarOff className="size-4" aria-hidden="true" />}
                         >
                             Make it an off day
@@ -155,15 +161,15 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
                         <Button
                             variant="ghost"
                             className="mr-auto text-danger hover:text-danger"
-                            onClick={() => { setDeleteError(''); setIsConfirmingDelete(true); }}
-                            disabled={isSubmitting}
+                            onClick={() => { remove.reset(); setIsConfirmingDelete(true); }}
+                            disabled={isBusy}
                             leftIcon={<Trash2 className="size-4" aria-hidden="true" />}
                         >
                             Delete
                         </Button>
                     )}
-                    <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-                    <Button type="submit" form="event-form" loading={isSubmitting} loadingText="Saving...">{event ? 'Save' : 'Add event'}</Button>
+                    <Button variant="ghost" onClick={onClose} disabled={isBusy}>Cancel</Button>
+                    <Button type="submit" form="event-form" loading={save.isRunning} loadingText="Saving..." disabled={offDay.isRunning}>{event ? 'Save' : 'Add event'}</Button>
                 </>
             )}
         >
@@ -226,8 +232,8 @@ export default function EventModal({ teamId, event, initialStart, initialEnd, ty
                 title="Delete event"
                 confirmLabel="Delete event"
                 busyLabel="Deleting..."
-                busy={isDeleting}
-                error={deleteError}
+                busy={remove.isRunning}
+                error={remove.error}
             >
                 Delete <strong className="text-fg">{eventTitle(event?.title, selectedType)}</strong>? This can't be undone.
             </ConfirmDialog>
