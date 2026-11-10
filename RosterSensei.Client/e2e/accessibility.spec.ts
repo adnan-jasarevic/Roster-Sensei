@@ -10,6 +10,7 @@ const PAGES = [
     { path: '/team', heading: 'Team roster', signedIn: true },
     { path: '/calendar', heading: 'Calendar', signedIn: true },
     { path: '/matches', heading: 'Matches', signedIn: true },
+    { path: '/map-pool', heading: 'Map Pool', signedIn: true },
     { path: '/statistics', heading: 'Statistics', signedIn: true },
     { path: '/account', heading: 'Account', signedIn: true },
 ];
@@ -22,6 +23,10 @@ function withData(api: MockApi) {
     ];
     const tokyo = team(1, 'Tokyo Ronin', 'Captain', true, {
         matches: [withLineup, finishedMatch(2, 'Osaka Oni', 7, 13, '2026-10-27T18:00:00Z')],
+        mapRatings: [
+            { userId: 'kenji', side: 'T', mapName: 'Mirage', rating: 6.5 },
+            { userId: 'me', side: 'CT', mapName: 'Nuke', rating: 8 },
+        ],
     });
     tokyo.members[1].steamProfileUrl = 'https://steamcommunity.com/profiles/76561198000000001';
     api.teams = [tokyo];

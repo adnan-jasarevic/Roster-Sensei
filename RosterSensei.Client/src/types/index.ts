@@ -279,3 +279,31 @@ export const isUpcoming = (match: Pick<Match, 'status' | 'scheduledDate'>, now: 
 // Still Scheduled although its time has passed: nobody has recorded what happened yet.
 export const needsResult = (match: Pick<Match, 'status' | 'scheduledDate'>, now: Date) =>
     match.status === 'Scheduled' && new Date(match.scheduledDate) <= now;
+
+/** A side of a map. Matches MapSide in RosterSensei.Domain. */
+export type MapSide = 'T' | 'CT';
+
+/** Response of GET /teams/{teamId}/map-pool. */
+export interface MapPool {
+    /** The maps that can be rated, in the pool's order. */
+    maps: string[];
+    /** One column per team member. */
+    players: { userId: string; username: string }[];
+    /** The signed-in user: the only column they can edit. */
+    currentUserId: string;
+    /** A missing (player, map, side) means not rated yet. */
+    ratings: MapRating[];
+}
+
+export interface MapRating {
+    userId: string;
+    mapName: string;
+    side: MapSide;
+    /** 1 to 10, at most one decimal. */
+    rating: number;
+}
+
+/** Body of PUT /teams/{teamId}/map-pool/{side}/{mapName}. DELETE on the same path clears the rating. */
+export interface SaveMapRatingRequest {
+    rating: number;
+}

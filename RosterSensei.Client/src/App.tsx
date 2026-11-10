@@ -7,6 +7,7 @@ import TeamRoster from './pages/teamroster';
 import Matches from './pages/matches';
 import Account from './pages/account';
 import PrivateRoute, { SignedOutRoute } from './components/private-route';
+import MapPool from './pages/map-pool';
 import AppLayout from './components/app-layout';
 
 // Recharts and react-big-calendar are large, so these pages are only loaded when opened.
@@ -37,6 +38,7 @@ function App() {
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/team" element={<TeamRoster />} />
                     <Route path="/matches" element={<Matches />} />
+                    <Route path="/map-pool" element={<MapPool />} />
                     <Route path="/calendar" element={<CalendarPage />} />
                     <Route path="/statistics" element={<Statistics />} />
                     <Route path="/account" element={<Account />} />
