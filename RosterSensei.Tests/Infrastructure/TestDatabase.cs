@@ -59,6 +59,12 @@ public sealed class TestDatabase : IDisposable
         return new TeamOffDayService(new TeamOffDayRepository(context), new TeamRepository(context));
     }
 
+    public MapPoolService MapPoolService()
+    {
+        var context = CreateContext();
+        return new MapPoolService(new MapRatingRepository(context), new TeamRepository(context));
+    }
+
     // The ID of the team's type made from the given premade type.
     public int TypeId(int teamId, EventTypePreset preset)
     {

@@ -1,7 +1,7 @@
 ﻿import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CalendarDays, ChartNoAxesCombined, LayoutDashboard, LogOut, Swords, UserRound, Users, type LucideIcon } from 'lucide-react';
+import { CalendarDays, ChartNoAxesCombined, LayoutDashboard, LogOut, Map as MapIcon, Swords, UserRound, Users, type LucideIcon } from 'lucide-react';
 import api from '../services/api';
 import { useResource } from '../hooks/use-resource';
 import { cx } from '../lib/cx';
@@ -16,6 +16,7 @@ const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
     { to: '/team', label: 'Team', icon: Users },
     { to: '/calendar', label: 'Calendar', icon: CalendarDays },
     { to: '/matches', label: 'Matches', icon: Swords },
+    { to: '/map-pool', label: 'Map Pool', icon: MapIcon },
     { to: '/statistics', label: 'Statistics', icon: ChartNoAxesCombined },
 ];
 
@@ -135,7 +136,7 @@ export default function AppLayout() {
                                 <>
                                     {isActive && <motion.span layoutId="nav-bottom-active" className="absolute inset-x-3 top-0 h-0.5 rounded-b bg-accent" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
                                     <item.icon className={cx('size-5', isActive && 'text-accent-text')} aria-hidden="true" />
-                                    <span className="max-w-full truncate px-1">{item.label}</span>
+                                    <span className="max-w-full truncate px-0.5">{item.label}</span>
                                 </>
                             )}
                         </NavLink>

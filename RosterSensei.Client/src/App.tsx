@@ -6,6 +6,7 @@ import Dashboard from './pages/dashboard';
 import TeamRoster from './pages/teamroster';
 import Matches from './pages/matches';
 import Account from './pages/account';
+import MapPool from './pages/map-pool';
 import PrivateRoute from './components/private-route';
 import AppLayout from './components/app-layout';
 
@@ -37,6 +38,7 @@ function App() {
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/team" element={<TeamRoster />} />
                     <Route path="/matches" element={<Matches />} />
+                    <Route path="/map-pool" element={<MapPool />} />
                     <Route path="/calendar" element={<CalendarPage />} />
                     <Route path="/statistics" element={<Statistics />} />
                     <Route path="/account" element={<Account />} />

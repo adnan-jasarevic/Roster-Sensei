@@ -18,6 +18,7 @@ public class AppDbContext : IdentityDbContext<AppUser>
     public DbSet<TeamEvent> TeamEvents { get; set; }
     public DbSet<TeamEventType> TeamEventTypes { get; set; }
     public DbSet<TeamOffDay> TeamOffDays { get; set; }
+    public DbSet<MapRating> MapRatings { get; set; }
 
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -187,6 +188,36 @@ public class AppDbContext : IdentityDbContext<AppUser>
 
             day.HasIndex(d => new { d.TeamId, d.Date })
                 .IsUnique();
+        });
+
+        builder.Entity<MapRating>(rating =>
+        {
+            // Belongs to the membership, not the team or the user directly: leaving, being removed and
+            // deleting the team all take the member's ratings with them, and a rating can't be saved for
+            // someone who isn't (or is no longer) on the team, even when they leave mid-request.
+            rating.HasOne(r => r.Member)
+                .WithMany()
+                .HasForeignKey(r => new { r.UserId, r.TeamId })
+                .OnDelete(DeleteBehavior.Cascade);
+
+            rating.Property(r => r.UserId)
+                .HasMaxLength(450);
+
+            rating.Property(r => r.MapName)
+                .IsRequired()
+                .HasMaxLength(30);
+
+            // 1.0 to 10.0.
+            rating.Property(r => r.Rating)
+                .HasPrecision(3, 1);
+
+            // One rating per member, map and side, even when two saves of a first rating arrive at once.
+            // Also covers the foreign key to the membership.
+            rating.HasIndex(r => new { r.UserId, r.TeamId, r.MapName, r.Side })
+                .IsUnique();
+
+            // The tab loads the whole team's ratings at once.
+            rating.HasIndex(r => r.TeamId);
         });
 
         builder.Entity<MatchMap>(map =>
