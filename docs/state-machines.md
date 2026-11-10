@@ -57,22 +57,27 @@ endpoint that edits a match. What a status allows:
 
 | Status | Scores | Counts in statistics | Shown as |
 |---|---|---|---|
-| Scheduled | None allowed (`CreateMatchDtoValidator`) | No | "Upcoming" |
-| Live | Allowed by the API. The form doesn't offer this status. | No | "Upcoming" on the Matches page |
+| Scheduled | None allowed (`CreateMatchDtoValidator`) | No | "Upcoming" while its time is ahead, "Needs result" once it has passed |
+| Live | Allowed by the API. The form doesn't offer this status. | No | "Live", under All only |
 | Finished | Series score, or worked out from map scores (`MatchService.SeriesScore`) | Yes | Result with outcome |
 | Cancelled | Allowed by the API. The form sends none. | No | Struck through; hidden on the calendar |
 
 On the client the status is the `MatchStatusName` union, and two functions name the questions
-pages ask: `hasResult` (Finished) and `isUpcoming` (Scheduled or Live). Requests send the status as
-a number (`MatchStatus` constant), responses as a name.
+pages ask: `hasResult` (Finished), `isUpcoming` (Scheduled, time still ahead) and `needsResult`
+(Scheduled, time passed). Requests send the status as a number (`MatchStatus` constant), responses
+as a name.
+
+"Upcoming" means the same thing everywhere: Scheduled with a time in the future. The dashboard
+applies it on the server (`TeamService.GetTeamDashboardAsync`), the Matches page with `isUpcoming`.
+A Scheduled match whose time has passed is "Needs result": it has its own filter and badge on the
+Matches page. Tests: `e2e/matches.spec.ts`.
 
 Known gaps, left alone because closing them changes what the product does:
 
 1. A scheduled match can never become Finished or Cancelled. Recording its result means adding a
    second match.
-2. "Upcoming" means two things. The dashboard counts Scheduled matches with a date in the future
-   (`TeamService.GetTeamDashboardAsync`). The Matches page lists every Scheduled or Live match,
-   past dates included.
+2. "Needs result" can only be looked at for now: recording the result needs the transition above
+   (issue #79).
 3. The API sends `matchOutcome: "Draw"` and `finalScore: "0 - 0"` for a match that isn't finished.
    The client only shows them when `hasResult` is true.
 

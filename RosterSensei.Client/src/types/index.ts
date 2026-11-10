@@ -271,5 +271,11 @@ export const canReceiveOwnership = (member: TeamMember) => !member.isOwner && me
 // The match was played, so its score and outcome mean something.
 export const hasResult = (match: Pick<Match, 'status'>) => match.status === 'Finished';
 
-// Still to be played or being played right now: what the Matches page lists under "Upcoming".
-export const isUpcoming = (match: Pick<Match, 'status'>) => match.status === 'Scheduled' || match.status === 'Live';
+// Scheduled for a time that hasn't come yet. The dashboard's "Upcoming" uses the same rule on the
+// server (TeamService.GetTeamDashboardAsync).
+export const isUpcoming = (match: Pick<Match, 'status' | 'scheduledDate'>, now: Date) =>
+    match.status === 'Scheduled' && new Date(match.scheduledDate) > now;
+
+// Still Scheduled although its time has passed: nobody has recorded what happened yet.
+export const needsResult = (match: Pick<Match, 'status' | 'scheduledDate'>, now: Date) =>
+    match.status === 'Scheduled' && new Date(match.scheduledDate) <= now;
