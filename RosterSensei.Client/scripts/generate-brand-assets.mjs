@@ -10,6 +10,8 @@ import { chromium } from 'playwright';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = join(root, 'public');
 const logo = readFileSync(join(publicDir, 'favicon.svg'), 'utf8');
+// The login page's sun disc backdrop (SunDisc in src/components/brand/logo.tsx). Never add rays to it.
+const sunDisc = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="100%" height="100%"><mask id="sun"><rect width="32" height="32" fill="#fff"/><rect y="17" width="32" height="1.5" fill="#000"/><rect y="21" width="32" height="2" fill="#000"/><rect y="25.5" width="32" height="2.5" fill="#000"/></mask><circle cx="16" cy="16" r="15" fill="#d4002f" mask="url(#sun)"/></svg>`;
 const kanjiPaths = [...readFileSync(join(root, 'src/components/brand/sensei-kanji.tsx'), 'utf8').matchAll(/<path d="([^"]+)"/g)].map(m => m[1]);
 const font = file => `data:font/woff2;base64,${readFileSync(join(root, 'node_modules', file)).toString('base64')}`;
 
@@ -35,12 +37,13 @@ const icon = (size, scale, background) => page(size, size, `
 const ogImage = page(1200, 630, `
 <div style="position:relative;width:1200px;height:630px;background:${CANVAS};overflow:hidden;font-family:Inter;font-weight:500">
   <div style="position:absolute;right:-90px;top:-70px;width:560px;height:560px">
-    ${logo.replace('<svg ', '<svg width="100%" height="100%" ')}
+    ${sunDisc}
     <svg viewBox="0 0 1000 2000" fill="#fff" style="position:absolute;left:50%;top:13%;width:76px;height:152px;transform:translateX(-50%)">
       ${kanjiPaths.map(d => `<path d="${d}"/>`).join('')}
     </svg>
   </div>
   <div style="position:absolute;left:80px;bottom:88px;right:560px">
+    <div style="width:112px;height:112px;margin-bottom:36px">${logo.replace('<svg ', '<svg width="100%" height="100%" ')}</div>
     <div style="font-family:'Zen Kaku Gothic New';font-weight:900;font-size:96px;line-height:1;letter-spacing:-0.025em;color:${FG}">Roster <span style="color:${ACCENT_TEXT}">Sensei</span></div>
     <div style="margin-top:28px;font-size:30px;line-height:1.35;color:${FG_MUTED}">Schedule praccs, log every map and see where your CS2 team wins.</div>
   </div>

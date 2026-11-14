@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { CalendarDays, ChartNoAxesCombined, Moon, Sun, Swords } from 'lucide-react';
 import { useTheme } from '../theme/theme-context';
-import { Logo, LogoMark } from './brand/logo';
+import { Logo, SunDisc } from './brand/logo';
 import { SenseiKanji } from './brand/sensei-kanji';
 import { IconButton } from './ui';
 
@@ -40,7 +40,7 @@ export default function AuthLayout({ title, subtitle, children, footer }: AuthLa
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
                 >
-                    <LogoMark size="100%" />
+                    <SunDisc size="100%" />
                     <SenseiKanji className="absolute top-[13%] left-1/2 -translate-x-1/2 text-[clamp(2rem,6vh,3.5rem)] text-on-accent" />
                 </motion.div>
 
