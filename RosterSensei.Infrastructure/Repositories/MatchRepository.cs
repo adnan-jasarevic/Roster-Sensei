@@ -34,7 +34,7 @@ public class MatchRepository : IMatchRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<LineupWriteOutcome> ReplaceLineupAsync(int teamId, int matchId, List<MatchParticipation> lineup)
+    public async Task<LineupWriteOutcome> ReplaceLineupAsync(int teamId, int matchId, List<MatchParticipation> lineup, bool requireFinished = false)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync();
         try
@@ -47,6 +47,10 @@ public class MatchRepository : IMatchRepository
                 .ExecuteUpdateAsync(s => s.SetProperty(m => m.TeamId, m => m.TeamId));
             if (locked == 0)
                 return LineupWriteOutcome.MatchNotFound;
+
+            // Read under the row lock, so the status can't change between this check and the write.
+            if (requireFinished && await _context.Matches.Where(m => m.Id == matchId).Select(m => m.Status).SingleAsync() != MatchStatus.Finished)
+                return LineupWriteOutcome.MatchNotFinished;
 
             var userIds = lineup.Select(p => p.UserId).Distinct().ToList();
             var allowed = await _context.TeamMembers

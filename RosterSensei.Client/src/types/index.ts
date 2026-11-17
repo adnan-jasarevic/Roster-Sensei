@@ -75,11 +75,21 @@ export interface LineupEntry {
     role: string | null;
     /** False for a substitute who was named but didn't play. */
     played: boolean;
+    /** 0.01 to 99.99. Null when not rated; only players who played in a finished match can be. */
+    rating: number | null;
+}
+
+/** One player sent in a lineup: by the Lineup dialog, or with the result in Add Match. */
+export interface LineupPlayer {
+    userId: string;
+    role?: string;
+    played: boolean;
+    rating?: number;
 }
 
 /** Body of PUT /Matches/{teamId}/{matchId}/lineup. Replaces the whole lineup; an empty list clears it. */
 export interface SetLineupRequest {
-    players: { userId: string; role?: string; played: boolean }[];
+    players: LineupPlayer[];
 }
 
 /** Limits enforced by SetMatchLineupDtoValidator. */
@@ -166,6 +176,8 @@ export interface CreateMatchRequest {
     bestOf?: number;
     maps: MatchMap[];
     notes?: string;
+    /** Who played, with optional ratings. Ratings only when the status is Finished. */
+    lineup?: LineupPlayer[];
 }
 
 /** The premade types, by the name the API uses. Matches EventTypePreset in RosterSensei.Domain. */

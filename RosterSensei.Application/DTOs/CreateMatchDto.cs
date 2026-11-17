@@ -16,4 +16,6 @@ public class CreateMatchDto
     public int? BestOf { get; set; }
     public List<MatchMapDto> Maps { get; set; } = new List<MatchMapDto>();
     public string? Notes { get; set; }
+    // Optional: who played, with optional ratings (finished matches only). Same rules as the lineup endpoint.
+    public List<LineupPlayerDto>? Lineup { get; set; }
 }

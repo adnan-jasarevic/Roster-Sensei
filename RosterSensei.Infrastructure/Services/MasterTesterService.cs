@@ -438,9 +438,17 @@ public class MasterTesterService : IMasterTesterService
             Notes = Chance(0.3) ? Pick(MatchNotes) : null
         };
 
-        // Five who played, plus one on the bench when the roster has a sixth player.
+        // Five who played, plus one on the bench when the roster has a sixth player. Players who played
+        // get an HLTV-style rating (around 1.00), a bit higher after a win; now and then one is left unrated.
+        bool won = ourScore > theirScore;
         foreach (var (player, index) in lineupPool.Take(6).Select((p, i) => (p, i)))
-            match.Participations.Add(new MatchParticipation { UserId = player.UserId, Role = player.Role, Played = index < 5 });
+        {
+            bool played = index < 5;
+            decimal? rating = played && Chance(0.92)
+                ? Math.Clamp(Math.Round((decimal)(0.55 + _random.NextDouble() * 0.85 + (won ? 0.15 : 0)), 2), PlayerRating.Min, PlayerRating.Max)
+                : null;
+            match.Participations.Add(new MatchParticipation { UserId = player.UserId, Role = player.Role, Played = played, Rating = rating });
+        }
 
         return match;
     }

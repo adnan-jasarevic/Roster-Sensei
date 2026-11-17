@@ -294,7 +294,7 @@ export class MockApi {
             const t = this.findTeam(m[1]);
             const target = t?.matches.find(x => x.id === Number(m![2]));
             if (!t || !target) return { status: 404, json: { message: 'Match was not found.' } };
-            const players = (body?.players ?? []) as { userId: string; role?: string | null; played: boolean }[];
+            const players = (body?.players ?? []) as { userId: string; role?: string | null; played: boolean; rating?: number }[];
             if (players.some(p => !t.members.some(x => x.id === p.userId))) {
                 return { status: 400, json: { message: 'Every player in the lineup must be a member of the team.' } };
             }
@@ -304,6 +304,7 @@ export class MockApi {
                     username: t.members.find(x => x.id === p.userId)!.username,
                     role: p.role?.trim() || null,
                     played: p.played,
+                    rating: p.rating ?? null,
                 }))
                 .sort((a, b) => Number(b.played) - Number(a.played));
             target.lineup = lineup;

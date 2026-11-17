@@ -18,8 +18,8 @@ const PAGES = [
 function withData(api: MockApi) {
     const withLineup = finishedMatch(1, 'Kyoto Kitsune', 13, 9, '2026-10-20T18:00:00Z');
     withLineup.lineup = [
-        { userId: 'kenji', username: 'kenji', role: 'AWP', played: true },
-        { userId: 'mika', username: 'mika', role: null, played: false },
+        { userId: 'kenji', username: 'kenji', role: 'AWP', played: true, rating: null },
+        { userId: 'mika', username: 'mika', role: null, played: false, rating: null },
     ];
     const tokyo = team(1, 'Tokyo Ronin', 'Captain', true, {
         matches: [withLineup, finishedMatch(2, 'Osaka Oni', 7, 13, '2026-10-27T18:00:00Z')],

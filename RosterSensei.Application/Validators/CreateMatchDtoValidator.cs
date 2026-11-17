@@ -61,6 +61,15 @@ public class CreateMatchDtoValidator : AbstractValidator<CreateMatchDto>
             .When(m => m.BestOf.HasValue && m.Maps != null)
             .WithMessage("A match cannot have more maps than its best-of count.");
 
+        RuleFor(m => m.Lineup!)
+            .SetValidator(new LineupValidator())
+            .When(m => m.Lineup != null);
+
+        RuleFor(m => m.Lineup)
+            .Must(lineup => lineup!.All(p => p.Rating == null))
+            .When(m => m.Status != MatchStatus.Finished && m.Lineup != null)
+            .WithMessage("Ratings can only be added to a finished match.");
+
         RuleFor(m => m.Notes)
             .MaximumLength(1000).WithMessage("Notes cannot exceed 1000 characters.");
     }

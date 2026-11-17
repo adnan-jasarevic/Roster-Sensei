@@ -45,6 +45,11 @@ public class MatchService : IMatchService
 
         var (ourScore, opponentScore) = SeriesScore(maps, dto.BestOf) ?? (dto.OurScore, dto.OpponentScore);
 
+        // Who played, with their ratings, saved together with the result.
+        var lineup = ToParticipations(dto.Lineup ?? new List<LineupPlayerDto>());
+        if (lineup.Any(p => !team.Members.Any(m => m.UserId == p.UserId)))
+            return Result<MatchDto>.Failure("Every player in the lineup must be a member of the team.");
+
         var newMatch = new Match
         {
             TeamId = teamId,
@@ -58,12 +63,14 @@ public class MatchService : IMatchService
             OpponentScore = opponentScore,
             BestOf = dto.BestOf,
             Maps = maps,
-            Notes = dto.Notes
+            Notes = dto.Notes,
+            Participations = lineup
         };
 
         var savedMatch = await _matchRepository.AddAsync(newMatch);
 
-        var resultDto = MapToDto(savedMatch, new Dictionary<string, string>());
+        var usernames = await _identityService.GetUsernamesByIdsAsync(lineup.Select(p => p.UserId));
+        var resultDto = MapToDto(savedMatch, usernames);
         return Result<MatchDto>.SuccessResult(resultDto);
     }
 
@@ -136,20 +143,16 @@ public class MatchService : IMatchService
         if (players.Select(p => p.UserId).Distinct().Count() != players.Count)
             return Result<List<MatchLineupEntryDto>>.Failure("A player can only be in the lineup once.");
 
-        var lineup = players
-            .Select(p => new MatchParticipation
-            {
-                UserId = p.UserId,
-                Role = string.IsNullOrWhiteSpace(p.Role) ? null : p.Role.Trim(),
-                Played = p.Played
-            })
-            .ToList();
+        var lineup = ToParticipations(players);
 
         // Match and membership checks run in the same transaction as the write.
-        switch (await _matchRepository.ReplaceLineupAsync(teamId, matchId, lineup))
+        var requireFinished = lineup.Any(p => p.Rating.HasValue);
+        switch (await _matchRepository.ReplaceLineupAsync(teamId, matchId, lineup, requireFinished))
         {
             case LineupWriteOutcome.MatchNotFound:
                 return Result<List<MatchLineupEntryDto>>.NotFound("Match was not found.");
+            case LineupWriteOutcome.MatchNotFinished:
+                return Result<List<MatchLineupEntryDto>>.Failure("Ratings can only be added to a finished match.");
             case LineupWriteOutcome.NotTeamMembers:
                 return Result<List<MatchLineupEntryDto>>.Failure("Every player in the lineup must be a member of the team.");
             case LineupWriteOutcome.Conflict:
@@ -160,6 +163,17 @@ public class MatchService : IMatchService
         return Result<List<MatchLineupEntryDto>>.SuccessResult(ToLineupDto(lineup, usernames));
     }
 
+    private static List<MatchParticipation> ToParticipations(IEnumerable<LineupPlayerDto> players) =>
+        players
+            .Select(p => new MatchParticipation
+            {
+                UserId = p.UserId,
+                Role = string.IsNullOrWhiteSpace(p.Role) ? null : p.Role.Trim(),
+                Played = p.Played,
+                Rating = p.Played ? p.Rating : null
+            })
+            .ToList();
+
     private static List<MatchLineupEntryDto> ToLineupDto(IEnumerable<MatchParticipation> lineup, IReadOnlyDictionary<string, string> usernames) =>
         lineup
             .OrderByDescending(p => p.Played)
@@ -169,7 +183,8 @@ public class MatchService : IMatchService
                 UserId = p.UserId,
                 Username = usernames.GetValueOrDefault(p.UserId) ?? "Unknown",
                 Role = p.Role,
-                Played = p.Played
+                Played = p.Played,
+                Rating = p.Rating
             })
             .ToList();
 

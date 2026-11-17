@@ -102,6 +102,10 @@ public class AppDbContext : IdentityDbContext<AppUser>
             participation.Property(p => p.Role)
                 .HasMaxLength(30);
 
+            // 0.01 to 99.99.
+            participation.Property(p => p.Rating)
+                .HasPrecision(4, 2);
+
             // A player is in a match's lineup at most once. Also the range that a lineup
             // replacement locks, so two replacements of the same lineup run one after the other.
             participation.HasIndex(p => new { p.MatchId, p.UserId })

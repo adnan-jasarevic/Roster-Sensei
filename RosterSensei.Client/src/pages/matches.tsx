@@ -4,6 +4,7 @@ import api from '../services/api';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { cx } from '../lib/cx';
 import { formatDateTime } from '../lib/format';
+import { formatPlayerRating } from '../lib/player-ratings';
 import { type LineupEntry, type Match, type MatchMap, type Team, canManageTeam, hasResult, isUpcoming, needsResult } from '../types';
 import AddMatchModal from '../components/add-match-modal';
 import LineupModal from '../components/lineup-modal';
@@ -221,6 +222,7 @@ function Lineup({ lineup, opponentName }: { lineup: LineupEntry[]; opponentName:
                 >
                     <span className="font-semibold">{player.username}</span>
                     {player.role && <span className="ml-1.5 text-fg-muted">{player.role}</span>}
+                    {player.rating != null && <span className="ml-1.5 font-bold text-fg tabular-nums"><span className="sr-only">rating </span>{formatPlayerRating(player.rating)}</span>}
                     {!player.played && <span className="ml-1.5">(sub, didn't play)</span>}
                 </li>
             ))}

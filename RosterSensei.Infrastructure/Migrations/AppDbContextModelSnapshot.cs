@@ -305,6 +305,10 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.Property<bool>("Played")
                         .HasColumnType("bit");
 
+                    b.Property<decimal?>("Rating")
+                        .HasPrecision(4, 2)
+                        .HasColumnType("decimal(4,2)");
+
                     b.Property<string>("Role")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
