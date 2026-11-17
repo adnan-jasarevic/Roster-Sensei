@@ -11,6 +11,7 @@ import { Logo } from './brand/logo';
 import { type LayoutContext } from './layout-context';
 import TopNavigation from './top-navigation';
 import { PageSkeleton } from './page-skeletons';
+import MasterTesterPanel from './master-tester-panel';
 
 const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -51,6 +52,17 @@ export default function AppLayout() {
             // The choice just won't survive a reload.
         }
     }, []);
+
+    // Goes up when the master tester generates data, so the open page mounts again and reloads.
+    const [dataVersion, setDataVersion] = useState(0);
+    const handleTestDataChanged = useCallback(() => {
+        reloadTeams();
+        setDataVersion(version => version + 1);
+    }, [reloadTeams]);
+    const handleTestTeamCreated = useCallback((teamId: number) => {
+        selectTeam(teamId);
+        handleTestDataChanged();
+    }, [selectTeam, handleTestDataChanged]);
 
     // Falls back to the first team if the remembered one is gone, e.g. the user was removed from it.
     const selectedTeam = teams?.find(team => team.id === selectedTeamId) ?? teams?.[0] ?? null;
@@ -122,7 +134,7 @@ export default function AppLayout() {
                 />
 
                 <main id="main" ref={mainRef} tabIndex={-1} data-scroll-root className="min-h-0 flex-1 overflow-y-auto">
-                    <motion.div key={pathname} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18, ease: 'easeOut' }}>
+                    <motion.div key={`${pathname}:${dataVersion}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18, ease: 'easeOut' }}>
                         <Suspense fallback={<PageSkeleton label={`Loading ${currentPage?.toLowerCase() ?? 'page'}`} />}>
                             <Outlet context={outletContext} />
                         </Suspense>
@@ -144,6 +156,9 @@ export default function AppLayout() {
                     ))}
                 </nav>
             </div>
+
+            {/* Renders nothing unless the API says this user is a master tester. */}
+            <MasterTesterPanel selectedTeam={selectedTeam} onTeamCreated={handleTestTeamCreated} onDataChanged={handleTestDataChanged} />
 
             {/* Tells screen reader users the page changed, as a full page load would. */}
             <div role="status" className="sr-only">{currentPage}</div>
