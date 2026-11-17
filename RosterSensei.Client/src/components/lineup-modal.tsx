@@ -2,7 +2,9 @@ import { useCallback, useState, type FormEvent } from 'react';
 import api from '../services/api';
 import { useAction } from '../hooks/use-action';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
+import { formatPlayerRating, parsePlayerRating } from '../lib/player-ratings';
 import {
+    hasResult,
     LINEUP_MAX_PLAYERS,
     LINEUP_MAX_ROLE_LENGTH,
     type LineupEntry,
@@ -26,7 +28,15 @@ interface Pick {
     userId: string;
     role: string;
     played: boolean;
+    /** As typed; empty means not rated. */
+    rating: string;
 }
+
+/** What's wrong with a typed rating, or undefined when it's fine (or empty). */
+const ratingErrorOf = (text: string) => {
+    const parsed = parsePlayerRating(text);
+    return parsed.ok ? undefined : parsed.message;
+};
 
 export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMissing }: LineupModalProps) {
     const loadMembers = useCallback<ResourceLoader<TeamMember[]>>(
@@ -37,9 +47,17 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
 
     // In the order players were added, which the API keeps.
     const [picks, setPicks] = useState<Pick[]>(() =>
-        (match.lineup ?? []).map(entry => ({ userId: entry.userId, role: entry.role ?? '', played: entry.played })),
+        (match.lineup ?? []).map(entry => ({
+            userId: entry.userId,
+            role: entry.role ?? '',
+            played: entry.played,
+            rating: entry.rating != null ? formatPlayerRating(entry.rating) : '',
+        })),
     );
     const save = useAction();
+    const [showErrors, setShowErrors] = useState(false);
+    // Only a finished match can be rated, and only players who played.
+    const canRate = hasResult(match);
     const isSaving = save.isRunning;
 
     const memberIds = new Set(members?.map(m => m.id));
@@ -55,7 +73,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
     const toggle = (userId: string) => {
         setPicks(current => current.some(p => p.userId === userId)
             ? current.filter(p => p.userId !== userId)
-            : [...current, { userId, role: '', played: true }]);
+            : [...current, { userId, role: '', played: true, rating: '' }]);
     };
 
     const update = (userId: string, change: Partial<Pick>) => {
@@ -65,13 +83,22 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
         if (!members) return;
+        if (canRate && currentPicks.some(p => p.played && ratingErrorOf(p.rating))) {
+            save.reset();
+            setShowErrors(true);
+            return;
+        }
 
         const body: SetLineupRequest = {
-            players: currentPicks.map(p => ({
-                userId: p.userId,
-                role: p.role.trim() || undefined,
-                played: p.played,
-            })),
+            players: currentPicks.map(p => {
+                const rating = parsePlayerRating(p.rating);
+                return {
+                    userId: p.userId,
+                    role: p.role.trim() || undefined,
+                    played: p.played,
+                    rating: canRate && p.played && rating.ok && rating.value !== null ? rating.value : undefined,
+                };
+            }),
         };
 
         const result = await save.run(() => api.put<LineupEntry[]>(`/Matches/${teamId}/${match.id}/lineup`, body), 'Failed to save the lineup.');
@@ -91,7 +118,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
             open
             onClose={onClose}
             title={`Lineup vs ${match.opponentName}`}
-            description={`Pick up to ${LINEUP_MAX_PLAYERS} players. Untick "Played" for a substitute who didn't play. Roles are optional.`}
+            description={`Pick up to ${LINEUP_MAX_PLAYERS} players. Untick "Played" for a substitute who didn't play. Roles${canRate ? ' and ratings (0.01 to 99.99)' : ''} are optional.`}
             busy={isSaving}
             closeOnBackdrop={false}
             footer={
@@ -135,7 +162,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
                                         className="min-w-0 sm:w-44 sm:shrink-0"
                                     />
                                     {pick && (
-                                        <div className="flex min-w-0 flex-1 items-center gap-2 pl-8 sm:pl-0">
+                                        <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2 pl-8 sm:flex-nowrap sm:pl-0">
                                             <Field label={`Role of ${member.username}`} hideLabel className="flex-1">
                                                 <Input
                                                     value={pick.role}
@@ -150,9 +177,27 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
                                                 label="Played"
                                                 aria-label={`${member.username} played`}
                                                 checked={pick.played}
-                                                onChange={e => update(member.id, { played: e.target.checked })}
-                                                className="shrink-0"
+                                                // A substitute who didn't play can't keep a rating.
+                                                onChange={e => update(member.id, e.target.checked ? { played: true } : { played: false, rating: '' })}
+                                                className="mt-1.5 shrink-0"
                                             />
+                                            {canRate && pick.played && (
+                                                <Field
+                                                    label={`Rating of ${member.username}`}
+                                                    hideLabel
+                                                    error={showErrors ? ratingErrorOf(pick.rating) : undefined}
+                                                    className="w-28 shrink-0"
+                                                >
+                                                    <Input
+                                                        value={pick.rating}
+                                                        onChange={e => update(member.id, { rating: e.target.value })}
+                                                        inputMode="decimal"
+                                                        placeholder="Rating"
+                                                        autoComplete="off"
+                                                        className="h-9"
+                                                    />
+                                                </Field>
+                                            )}
                                         </div>
                                     )}
                                 </li>

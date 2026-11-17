@@ -2,8 +2,10 @@ import { useState } from 'react';
 import api from '../services/api';
 import { useAction } from '../hooks/use-action';
 import { MAP_POOL } from '../constants/maps';
+import { parsePlayerRating, ratingsAreValid } from '../lib/player-ratings';
 import { MatchKind, MatchStatus, type CreateMatchRequest, type MatchKindValue, type MatchMap, type MatchStatusValue } from '../types';
 import { Alert, Button, Field, Input, Modal, SegmentedControl, Select, Textarea, ToggleChip } from './ui';
+import MatchPlayersField, { type PlayerPick } from './match-players-field';
 
 interface AddMatchModalProps {
     teamId: number;
@@ -45,6 +47,7 @@ export default function AddMatchModal({ teamId, onClose, onCreated }: AddMatchMo
     const [maps, setMaps] = useState<string[]>([]);
     const [mapScores, setMapScores] = useState<Record<string, MapScoreInput>>({});
     const [notes, setNotes] = useState('');
+    const [players, setPlayers] = useState<PlayerPick[]>([]);
 
     const save = useAction();
     const isSubmitting = save.isRunning;
@@ -98,7 +101,7 @@ export default function AddMatchModal({ teamId, onClose, onCreated }: AddMatchMo
         e.preventDefault();
 
         // The button stays enabled so pressing it can explain what's missing, right on the fields.
-        if (!opponentName.trim() || !scheduledDate) {
+        if (!opponentName.trim() || !scheduledDate || (isFinished && !ratingsAreValid(players))) {
             save.reset();
             setShowFieldErrors(true);
             return;
@@ -119,6 +122,13 @@ export default function AddMatchModal({ teamId, onClose, onCreated }: AddMatchMo
             bestOf,
             maps: maps.map(buildMap),
             notes: notes.trim() || undefined,
+            // Only a finished match records who played; the Lineup dialog covers the rest later.
+            lineup: isFinished && players.length > 0
+                ? players.map(p => {
+                    const rating = parsePlayerRating(p.rating);
+                    return { userId: p.userId, played: true, rating: rating.ok && rating.value !== null ? rating.value : undefined };
+                })
+                : undefined,
         };
 
         const result = await save.run(() => api.post(`/Matches/${teamId}`, payload), 'Failed to add the match.');
@@ -244,6 +254,8 @@ export default function AddMatchModal({ teamId, onClose, onCreated }: AddMatchMo
                         <p className="text-xs text-fg-subtle">Halves are optional. If the final score is higher than both halves added up, the map went to overtime.</p>
                     </div>
                 )}
+
+                {isFinished && <MatchPlayersField teamId={teamId} value={players} onChange={setPlayers} showErrors={showFieldErrors} />}
 
                 <Field label="Notes" optional>
                     <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />

@@ -12,6 +12,9 @@ public class LineupPlayerDto
     // Free text, up to 30 characters. Empty or null means not recorded.
     public string? Role { get; set; }
     public bool Played { get; set; } = true;
+    // 0.01 to 99.99 with at most two decimals, or null when not rated. Only for a player who played,
+    // in a finished match.
+    public decimal? Rating { get; set; }
 }
 
 public class MatchLineupEntryDto
@@ -21,4 +24,6 @@ public class MatchLineupEntryDto
     // Null when not recorded.
     public string? Role { get; set; }
     public bool Played { get; set; }
+    // Null when not rated.
+    public decimal? Rating { get; set; }
 }

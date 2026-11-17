@@ -45,7 +45,7 @@ test.describe('Match lineup', () => {
 
     test('editing starts from the saved lineup, and unticking everyone clears it', async ({ page, api }) => {
         const t = withMatch(api);
-        t.matches[0].lineup = [{ userId: 'kenji', username: 'kenji', role: 'AWP', played: true }];
+        t.matches[0].lineup = [{ userId: 'kenji', username: 'kenji', role: 'AWP', played: true, rating: null }];
         await api.install(page);
         await page.goto('/matches');
 
@@ -94,8 +94,8 @@ test.describe('Match lineup', () => {
     test('a player who left the team is flagged and dropped on save', async ({ page, api }) => {
         const t = withMatch(api);
         t.matches[0].lineup = [
-            { userId: 'kenji', username: 'kenji', role: null, played: true },
-            { userId: 'gone', username: 'ghost', role: 'Entry', played: true },
+            { userId: 'kenji', username: 'kenji', role: null, played: true, rating: null },
+            { userId: 'gone', username: 'ghost', role: 'Entry', played: true, rating: null },
         ];
         await api.install(page);
         await page.goto('/matches');
@@ -147,7 +147,7 @@ test.describe('Match lineup', () => {
 
     test('players see the lineup but cannot edit it', async ({ page, api }) => {
         const t = withMatch(api, 'Player');
-        t.matches[0].lineup = [{ userId: 'kenji', username: 'kenji', role: 'AWP', played: true }];
+        t.matches[0].lineup = [{ userId: 'kenji', username: 'kenji', role: 'AWP', played: true, rating: null }];
         await api.install(page);
         await page.goto('/matches');
 

@@ -4,6 +4,7 @@ import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import PageHeader, { PageContainer } from '../components/page-header';
 import { PanelSkeleton, StatsSkeleton } from '../components/page-skeletons';
 import ScrimAnalytics, { type MatchTypeFilter } from '../components/scrim-analytics';
+import PlayerStatistics from '../components/player-statistics';
 import TeamCharts from '../components/team-charts';
 import TeamGate from '../components/team-gate';
 import { Alert, Card, ErrorState, LoadingRegion, SegmentedControl } from '../components/ui';
@@ -43,7 +44,7 @@ function StatisticsContent({ team }: { team: Team }) {
 
     return (
         <PageContainer>
-            <PageHeader title="Statistics" description="How your team performs, per map and over time." />
+            <PageHeader title="Statistics" description="How your team and its players perform, per map and over time." />
 
             <SegmentedControl label="Match type" hideLabel value={typeFilter} options={TYPE_FILTERS} onChange={setTypeFilter} className="mb-6" />
 
@@ -65,6 +66,8 @@ function StatisticsContent({ team }: { team: Team }) {
                     </div>
                 )}
             </div>
+
+            <PlayerStatistics matches={matches} typeFilter={typeFilter} />
 
             <ScrimAnalytics matches={matches} typeFilter={typeFilter} />
         </PageContainer>

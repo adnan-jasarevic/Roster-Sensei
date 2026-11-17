@@ -15,6 +15,8 @@ A web app for amateur Counter-Strike 2 teams to manage their roster, schedule ma
 - **Dashboard:** win rate, member count, recent results and upcoming matches for the selected team.
 - **Matches:** schedule or record matches with opponent, tournament, format (Bo1/Bo2/Bo3/Bo5), maps in play order, score and notes. Filter by upcoming or results.
 - **Lineups:** the Owner, Captain and Officers record who played each match from the Lineup dialog on the Matches page, with an optional free-text role and whether they played or sat on the bench. The match list shows each lineup.
+- **Player ratings:** when adding a finished match, tick who played and optionally give each a rating from 0.01 to 99.99 (a comma works as the decimal point). Ratings can be added or corrected later in a match's lineup, only for players who played in a finished match.
+- **Player statistics:** a section of the Statistics tab with each player's rated matches, average, form (last 5 rated matches), best and worst rating. Filters: match type (the tab's switch), period, map and a minimum number of rated matches. Columns sort.
 - **Calendar:** plan praccs, official matches, VOD reviews and more in month, week, day and agenda views.
   - **Event types:** each team picks its own. New teams start with Pracc, Official Match, VOD Review, Theory and Other; Scrim, Recorded Match, Break, Warmup and Meet can be added, as can custom types. Types can be renamed, recoloured and removed. Removing a type keeps its events and moves them to Other, which every team always has and which can't be changed.
   - **Recorded matches:** with the Recorded Match type on, matches from the Matches page show on the calendar, and one that starts during a Scrim or Official Match event takes that event's place.
