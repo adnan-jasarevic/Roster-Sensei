@@ -65,7 +65,9 @@ export function Popover({ renderTrigger, label, role = 'dialog', align = 'end', 
 
         panel.style.left = `${left}px`;
         panel.style.top = `${Math.max(VIEWPORT_MARGIN, top)}px`;
-        (panel.querySelector<HTMLElement>('[data-popover-focus]') ?? panel.querySelector<HTMLElement>('[role="menuitem"], input, button'))?.focus();
+        // preventScroll: the panel is already placed in view. Letting focus scroll a scrollable ancestor
+        // (like a dialog body) fires the scroll listener below, which would close the panel right away.
+        (panel.querySelector<HTMLElement>('[data-popover-focus]') ?? panel.querySelector<HTMLElement>('[role="menuitem"], input, button'))?.focus({ preventScroll: true });
     }, [open, align, matchTriggerWidth]);
 
     useEffect(() => {
@@ -82,8 +84,14 @@ export function Popover({ renderTrigger, label, role = 'dialog', align = 'end', 
             close();
         };
         // The panel is fixed, so it would drift away from its trigger if the page moved under it.
+        // Close only when the trigger really moved: the browser delivers scroll events a frame late, so
+        // a scroll that finished just before the click (a wheel flick, or a test scrolling the trigger
+        // into view) arrives after opening and would otherwise close the panel straight away.
+        const openedAt = triggerRef.current?.getBoundingClientRect();
         const onScroll = (event: Event) => {
-            if (!panelRef.current?.contains(event.target as Node)) close(false);
+            if (panelRef.current?.contains(event.target as Node)) return;
+            const now = triggerRef.current?.getBoundingClientRect();
+            if (!openedAt || !now || Math.abs(now.top - openedAt.top) > 1 || Math.abs(now.left - openedAt.left) > 1) close(false);
         };
         const onResize = () => close(false);
 

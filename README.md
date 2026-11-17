@@ -97,6 +97,18 @@ npm run dev
 
 Open http://localhost:5173. The frontend calls `https://localhost:7185/api` by default. To point it elsewhere, copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL`.
 
+### Master tester tools (development only)
+
+A master tester account gets a **Tester** button in the corner of every page. It creates a full team in one click (made-up players, matches with maps and lineups, calendar events, off days and map pool ratings), fills any single section of the selected team, and sends test invites. Each section can be filled with **Add**, which keeps what's there, or **Replace**, which clears it first.
+
+The tools are only switched on in Development (`MasterTester:Enabled` in `appsettings.Development.json`) and always off in Production. Testers are listed by email in user-secrets, never in the code:
+
+```bash
+dotnet user-secrets set "MasterTester:Emails:0" "<tester account email>" --project RosterSensei.Api
+```
+
+For everyone else, the endpoints under `/api/master-tester` answer 404. Made-up players use `@rostersensei.test` emails and have no password, so nobody can log in as them.
+
 ## Tests and CI
 
 The backend tests run the real services and repositories against an in-memory SQLite database, so they need no SQL Server:

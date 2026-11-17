@@ -23,8 +23,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly string _connectionString = $"DataSource=file:api-{Guid.NewGuid():N}?mode=memory&cache=shared";
     private readonly SqliteConnection _keepAlive;
 
-    public ApiFactory()
+    private readonly IReadOnlyDictionary<string, string> _settings;
+
+    // Extra configuration, e.g. to switch on the master tester tools.
+    public ApiFactory(IReadOnlyDictionary<string, string>? settings = null)
     {
+        _settings = settings ?? new Dictionary<string, string>();
         _keepAlive = new SqliteConnection(_connectionString);
         _keepAlive.Open();
     }
@@ -32,6 +36,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        foreach (var (key, value) in _settings)
+            builder.UseSetting(key, value);
         // UseSetting reaches the configuration Program.cs reads before Build(), where it checks the key.
         builder.UseSetting("Jwt:Key", JwtKey);
         builder.UseSetting("ConnectionStrings:DefaultConnection", _connectionString);

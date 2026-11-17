@@ -89,6 +89,8 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IMapRatingRepository, MapRatingRepository>();
 builder.Services.AddScoped<IMapPoolService, MapPoolService>();
+// Test data tools. Off unless MasterTester:Enabled is true (Development only) and the user is listed in MasterTester:Emails.
+builder.Services.AddScoped<IMasterTesterService, RosterSensei.Infrastructure.Services.MasterTesterService>();
 
 var app = builder.Build();
 app.UseExceptionHandler();
