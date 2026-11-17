@@ -23,6 +23,35 @@ public class MatchRepository : IMatchRepository
         return match;
     }
 
+    public async Task<Match?> GetForEditAsync(int teamId, int matchId)
+    {
+        return await _context.Matches
+            .Include(m => m.Maps)
+            .Include(m => m.Participations)
+            .AsSplitQuery()
+            .SingleOrDefaultAsync(m => m.Id == matchId && m.TeamId == teamId);
+    }
+
+    public async Task<bool> UpdateAsync(Match match, int expectedVersion)
+    {
+        // The WHERE clause checks the version the user started from, not the one loaded by this request,
+        // so changes saved between opening the form and pressing Save are caught too.
+        _context.Entry(match).Property(m => m.Version).OriginalValue = expectedVersion;
+        match.Version = expectedVersion + 1;
+        try
+        {
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            // The UPDATE matched no row: someone changed or removed the match meanwhile. Includes a
+            // lineup player added twice at once (refused by the unique index); nothing was saved.
+            _context.ChangeTracker.Clear();
+            return false;
+        }
+    }
+
     public async Task<List<Match>> GetMatchesByTeamIdAsync(int teamId, CancellationToken cancellationToken = default)
     {
         return await _context.Matches

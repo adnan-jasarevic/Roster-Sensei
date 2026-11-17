@@ -123,6 +123,11 @@ public class AppDbContext : IdentityDbContext<AppUser>
             .HasForeignKey(m => m.TeamId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // EF adds "AND Version = @original" to every UPDATE, so a concurrent edit makes the save fail.
+        builder.Entity<Match>()
+            .Property(m => m.Version)
+            .IsConcurrencyToken();
+
         builder.Entity<TeamEvent>(e =>
         {
             e.HasOne(te => te.Team)

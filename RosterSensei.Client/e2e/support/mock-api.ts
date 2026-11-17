@@ -103,6 +103,7 @@ export function finishedMatch(id: number, opponentName: string, ourScore: number
         maps: [{ mapName: 'Mirage', ourScore, opponentScore }],
         matchOutcome: ourScore > opponentScore ? 'Win' : ourScore < opponentScore ? 'Loss' : 'Draw',
         lineup: [],
+        version: 1,
     };
 }
 
@@ -288,6 +289,48 @@ export class MockApi {
             if (!t) return { status: 404, json: { message: 'Team not found.' } };
             if (method === 'GET') return { json: t.matches };
             if (method === 'POST') return { json: { id: this.nextId++ } };
+        }
+
+        if ((m = path.match(/^\/Matches\/(\d+)\/(\d+)$/)) && method === 'PUT') {
+            const t = this.findTeam(m[1]);
+            const target = t?.matches.find(x => x.id === Number(m![2]));
+            if (!t || !target) return { status: 404, json: { message: 'Match was not found.' } };
+            if (body?.version !== target.version) {
+                return { status: 409, json: { message: 'Someone else changed this match while you were editing it. Open it again to see their changes.' } };
+            }
+            const status = (['Scheduled', undefined, 'Finished', 'Cancelled'] as const)[body.status as number]!;
+            const maps = (body.maps ?? []) as Match['maps'];
+            const played = maps.filter(x => x.ourScore != null && x.opponentScore != null);
+            const [ours, theirs] = played.length === 0
+                ? [body.ourScore ?? 0, body.opponentScore ?? 0]
+                : played.length === 1 && (body.bestOf ?? 1) === 1
+                    ? [played[0].ourScore!, played[0].opponentScore!]
+                    : [played.filter(x => x.ourScore! > x.opponentScore!).length, played.filter(x => x.opponentScore! > x.ourScore!).length];
+            const lineup: LineupEntry[] = body.lineup
+                ? (body.lineup as { userId: string; role?: string; played: boolean; rating?: number }[]).map(p => ({
+                    userId: p.userId,
+                    username: t.members.find(x => x.id === p.userId)?.username ?? target.lineup.find(x => x.userId === p.userId)?.username ?? p.userId,
+                    role: p.role ?? null,
+                    played: p.played,
+                    rating: p.rating ?? null,
+                }))
+                : target.lineup.map(p => (status === 'Finished' ? p : { ...p, rating: null }));
+            Object.assign(target, {
+                opponentName: body.opponentName,
+                tournament: body.tournament,
+                scheduledDate: body.scheduledDate,
+                playedDate: status === 'Finished' ? body.playedDate : undefined,
+                status,
+                type: body.type === 1 ? 'Scrim' : 'Official',
+                bestOf: body.bestOf,
+                maps,
+                notes: body.notes,
+                finalScore: `${ours} - ${theirs}`,
+                matchOutcome: ours > theirs ? 'Win' : ours < theirs ? 'Loss' : 'Draw',
+                lineup,
+                version: target.version + 1,
+            } satisfies Partial<Match>);
+            return { json: target };
         }
 
         if ((m = path.match(/^\/Matches\/(\d+)\/(\d+)\/lineup$/)) && method === 'PUT') {

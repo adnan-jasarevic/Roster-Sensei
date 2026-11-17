@@ -4,7 +4,7 @@ import api from '../services/api';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { formatDate, formatTime } from '../lib/format';
 import { type MatchResponse, type Team, type TeamDashboardData, canManageTeam } from '../types';
-import AddMatchModal from '../components/add-match-modal';
+import MatchModal from '../components/match-modal';
 import CreateTeamModal from '../components/create-team-modal';
 import { OutcomeBadge } from '../components/domain-badges';
 import { useLayoutContext } from '../components/layout-context';
@@ -133,7 +133,17 @@ function DashboardContent({ team, onCreateTeam }: { team: Team; onCreateTeam: ()
                 </div>
             )}
 
-            {isAddMatchOpen && <AddMatchModal teamId={team.id} onClose={() => setIsAddMatchOpen(false)} onCreated={reload} />}
+            {isAddMatchOpen && (
+                <MatchModal
+                    teamId={team.id}
+                    onClose={() => setIsAddMatchOpen(false)}
+                    onSaved={() => {
+                        setIsAddMatchOpen(false);
+                        reload();
+                    }}
+                    onStale={reload}
+                />
+            )}
         </PageContainer>
     );
 }

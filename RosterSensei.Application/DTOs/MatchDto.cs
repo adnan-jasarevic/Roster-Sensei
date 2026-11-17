@@ -16,4 +16,6 @@ public class MatchDto
     public string? Notes { get; set; }
     // Who was in the lineup. Empty when it wasn't recorded.
     public List<MatchLineupEntryDto> Lineup { get; set; } = new List<MatchLineupEntryDto>();
+    // Sent back with an edit, so a save over someone else's newer changes can be refused.
+    public int Version { get; set; }
 }

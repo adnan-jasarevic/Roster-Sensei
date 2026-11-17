@@ -1,4 +1,4 @@
-import { Check, Crown, Hourglass, Minus, Radio, Shield, Star, X } from 'lucide-react';
+import { Check, Crown, Hourglass, Minus, Shield, Star, X } from 'lucide-react';
 import type { MatchOutcome, MatchStatusName, TeamRole } from '../types';
 import { Badge, type BadgeTone } from './ui';
 
@@ -15,7 +15,6 @@ export function OutcomeBadge({ outcome }: { outcome?: MatchOutcome }) {
 }
 
 export function MatchStatusBadge({ status }: { status: MatchStatusName }) {
-    if (status === 'Live') return <Badge tone="accent" icon={<Radio />} className="min-w-16">Live</Badge>;
     if (status === 'Cancelled') return <Badge className="min-w-16 line-through">Cancelled</Badge>;
     return <Badge className="min-w-16">{status}</Badge>;
 }

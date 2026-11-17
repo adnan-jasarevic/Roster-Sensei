@@ -239,6 +239,10 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TeamId");

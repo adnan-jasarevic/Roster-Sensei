@@ -40,10 +40,9 @@ export type MatchOutcome = 'Win' | 'Loss' | 'Draw';
  * Where a match is in its life, as responses name it. Matches MatchStatus in RosterSensei.Domain.
  * Requests send the number instead: see the `MatchStatus` constant below.
  *
- * A match is created in one of these and stays there: the API has no endpoint that moves a match
- * to another status yet.
+ * Editing a match (PUT /Matches/{teamId}/{matchId}) can move it to any other status.
  */
-export type MatchStatusName = 'Scheduled' | 'Live' | 'Finished' | 'Cancelled';
+export type MatchStatusName = 'Scheduled' | 'Finished' | 'Cancelled';
 
 /** Official or scrim, as responses name it. Requests send the number: see `MatchKind` below. */
 export type MatchKindName = 'Official' | 'Scrim';
@@ -65,6 +64,8 @@ export interface Match {
     notes?: string;
     /** Who was in the lineup, players who played first. Empty when it wasn't recorded. */
     lineup: LineupEntry[];
+    /** Sent back with an edit, so a save over someone else's newer changes is refused (409). */
+    version: number;
 }
 
 /** One player in a match lineup, as the API returns it. */
@@ -146,10 +147,9 @@ export interface TeamInvite {
 }
 
 
-// Numeric values match the MatchStatus enum in RosterSensei.Domain.
+// Numeric values match the MatchStatus enum in RosterSensei.Domain. 1 was "Live", which was removed.
 export const MatchStatus = {
     Scheduled: 0,
-    Live: 1,
     Finished: 2,
     Cancelled: 3,
 } as const;
@@ -176,8 +176,13 @@ export interface CreateMatchRequest {
     bestOf?: number;
     maps: MatchMap[];
     notes?: string;
-    /** Who played, with optional ratings. Ratings only when the status is Finished. */
+    /** Who played, with optional ratings. Ratings only when the status is Finished. On an edit, leaving it out keeps the lineup. */
     lineup?: LineupPlayer[];
+}
+
+/** Body of PUT /Matches/{teamId}/{matchId}: the whole match, with the version the edit started from. */
+export interface UpdateMatchRequest extends CreateMatchRequest {
+    version: number;
 }
 
 /** The premade types, by the name the API uses. Matches EventTypePreset in RosterSensei.Domain. */
