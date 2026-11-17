@@ -75,3 +75,24 @@ test.describe('roster action menu', () => {
         expect(api.requestsTo('PUT', /^\/Teams\/1\/members\/kenji\/role$/)[0].body).toEqual({ newRole: 'Officer' });
     });
 });
+
+test.describe('dropdown in a scrolling dialog', () => {
+    test('stays open after opening, and closes when the dialog is scrolled', async ({ page, api }) => {
+        await api.install(page);
+        await page.goto('/matches');
+        await page.getByRole('button', { name: 'Add match' }).click();
+        const dialog = page.getByRole('dialog', { name: 'Add match' });
+
+        // Clicking scrolls the dialog to the field first. That scroll event arrives after the
+        // list has opened, and must not close it.
+        await dialog.getByRole('combobox', { name: 'Status' }).click();
+        const list = page.getByRole('listbox', { name: 'Status' });
+        await expect(list).toBeVisible();
+        await page.waitForTimeout(200);
+        await expect(list).toBeVisible();
+
+        // A real scroll moves the field away from the fixed list, so the list closes.
+        await dialog.getByRole('combobox', { name: 'Status' }).evaluate(el => el.closest('.overflow-y-auto')!.scrollBy(0, -150));
+        await expect(list).toBeHidden();
+    });
+});
