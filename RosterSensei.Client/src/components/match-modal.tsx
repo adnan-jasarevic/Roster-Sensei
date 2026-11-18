@@ -1,16 +1,35 @@
 import { useState } from 'react';
+import { format } from 'date-fns';
 import api from '../services/api';
 import { useAction } from '../hooks/use-action';
 import { MAP_POOL } from '../constants/maps';
-import { parsePlayerRating, ratingsAreValid } from '../lib/player-ratings';
-import { MatchKind, MatchStatus, type CreateMatchRequest, type MatchKindValue, type MatchMap, type MatchStatusValue } from '../types';
+import { formatPlayerRating, parsePlayerRating, ratingsAreValid } from '../lib/player-ratings';
+import {
+    MatchKind,
+    MatchStatus,
+    hasResult,
+    type CreateMatchRequest,
+    type LineupPlayer,
+    type Match,
+    type MatchKindValue,
+    type MatchMap,
+    type MatchStatusValue,
+    type UpdateMatchRequest,
+} from '../types';
 import { Alert, Button, Field, Input, Modal, SegmentedControl, Select, Textarea, ToggleChip } from './ui';
 import MatchPlayersField, { type PlayerPick } from './match-players-field';
 
-interface AddMatchModalProps {
+interface MatchModalProps {
     teamId: number;
+    /** The match to edit. Without it, the dialog adds a new match. */
+    match?: Match;
+    /** Opens the edit with the status set to Finished: the "Add result" action. */
+    recordResult?: boolean;
     onClose: () => void;
-    onCreated: () => void;
+    /** Saved: closes the dialog. The message is for a toast. */
+    onSaved: (message: string) => void;
+    /** The list behind the dialog is out of date: the match was removed or changed by someone else. */
+    onStale: () => void;
 }
 
 const TYPE_OPTIONS = [
@@ -34,20 +53,69 @@ const EMPTY_MAP_SCORE: MapScoreInput = {
 };
 
 const toNumber = (value: string) => (value.trim() === '' ? undefined : Math.max(0, Number(value)));
+const toText = (value: number | null | undefined) => (value == null ? '' : String(value));
 
-export default function AddMatchModal({ teamId, onClose, onCreated }: AddMatchModalProps) {
-    const [opponentName, setOpponentName] = useState('');
-    const [tournament, setTournament] = useState('');
-    const [scheduledDate, setScheduledDate] = useState('');
-    const [status, setStatus] = useState<MatchStatusValue>(MatchStatus.Scheduled);
-    const [type, setType] = useState<MatchKindValue>(MatchKind.Official);
-    const [ourScore, setOurScore] = useState(0);
-    const [opponentScore, setOpponentScore] = useState(0);
-    const [bestOf, setBestOf] = useState(1);
-    const [maps, setMaps] = useState<string[]>([]);
-    const [mapScores, setMapScores] = useState<Record<string, MapScoreInput>>({});
-    const [notes, setNotes] = useState('');
-    const [players, setPlayers] = useState<PlayerPick[]>([]);
+/** "2026-11-20T19:00" in the user's time zone, the format a datetime-local input takes. */
+const toLocalInput = (iso: string) => format(new Date(iso), "yyyy-MM-dd'T'HH:mm");
+
+/** The series score of a finished match, read from "13 - 9". */
+const seriesScore = (match: Match) => {
+    const [ours, theirs] = match.finalScore.split(' - ').map(Number);
+    return { ours: Number.isFinite(ours) ? ours : 0, theirs: Number.isFinite(theirs) ? theirs : 0 };
+};
+
+/**
+ * The lineup to send with an edit of a finished match. The dialog only shows who played and their
+ * ratings, so everything else is kept: roles, substitutes who stay unticked, and players who have
+ * left the team since (they aren't listed, so they stay among the picks as they were).
+ */
+function mergeLineup(match: Match, picks: PlayerPick[]): LineupPlayer[] {
+    const existing = new Map(match.lineup.map(entry => [entry.userId, entry]));
+    const picked = new Set(picks.map(p => p.userId));
+    const played = picks.map(p => {
+        const rating = parsePlayerRating(p.rating);
+        return {
+            userId: p.userId,
+            role: existing.get(p.userId)?.role ?? undefined,
+            played: true,
+            rating: rating.ok && rating.value !== null ? rating.value : undefined,
+        };
+    });
+    const substitutes = match.lineup
+        .filter(entry => !entry.played && !picked.has(entry.userId))
+        .map(entry => ({ userId: entry.userId, role: entry.role ?? undefined, played: false }));
+    return [...played, ...substitutes];
+}
+
+export default function MatchModal({ teamId, match, recordResult = false, onClose, onSaved, onStale }: MatchModalProps) {
+    const isEdit = match !== undefined;
+    const [opponentName, setOpponentName] = useState(match?.opponentName ?? '');
+    const [tournament, setTournament] = useState(match?.tournament ?? '');
+    const [scheduledDate, setScheduledDate] = useState(match ? toLocalInput(match.scheduledDate) : '');
+    const [status, setStatus] = useState<MatchStatusValue>(
+        recordResult ? MatchStatus.Finished : match ? MatchStatus[match.status] : MatchStatus.Scheduled,
+    );
+    const [type, setType] = useState<MatchKindValue>(match ? MatchKind[match.type] : MatchKind.Official);
+    const [ourScore, setOurScore] = useState(match && hasResult(match) ? seriesScore(match).ours : 0);
+    const [opponentScore, setOpponentScore] = useState(match && hasResult(match) ? seriesScore(match).theirs : 0);
+    const [bestOf, setBestOf] = useState(match?.bestOf ?? 1);
+    const [maps, setMaps] = useState<string[]>(match?.maps.map(m => m.mapName) ?? []);
+    const [mapScores, setMapScores] = useState<Record<string, MapScoreInput>>(() => Object.fromEntries(
+        (match?.maps ?? []).map(m => [m.mapName, {
+            ourScore: toText(m.ourScore),
+            opponentScore: toText(m.opponentScore),
+            ourFirstHalf: toText(m.ourFirstHalf),
+            opponentFirstHalf: toText(m.opponentFirstHalf),
+            ourSecondHalf: toText(m.ourSecondHalf),
+            opponentSecondHalf: toText(m.opponentSecondHalf),
+        }]),
+    ));
+    const [notes, setNotes] = useState(match?.notes ?? '');
+    // Everyone who played, with their rating. A scheduled match's lineup counts too: they're
+    // the expected players, ready to be confirmed when the result goes in.
+    const [players, setPlayers] = useState<PlayerPick[]>(() => (match?.lineup ?? [])
+        .filter(entry => entry.played)
+        .map(entry => ({ userId: entry.userId, rating: entry.rating != null ? formatPlayerRating(entry.rating) : '' })));
 
     const save = useAction();
     const isSubmitting = save.isRunning;
@@ -110,6 +178,18 @@ export default function AddMatchModal({ teamId, onClose, onCreated }: AddMatchMo
         // datetime-local has no time zone; new Date() reads it as the user's local time and toISOString() sends UTC.
         const scheduledIso = new Date(scheduledDate).toISOString();
 
+        const lineup: LineupPlayer[] | undefined = !isFinished
+            // On an edit, leaving the lineup out keeps it (the API drops ratings from a match that isn't finished).
+            ? undefined
+            : isEdit
+                ? mergeLineup(match, players)
+                : players.length > 0
+                    ? players.map(p => {
+                        const rating = parsePlayerRating(p.rating);
+                        return { userId: p.userId, played: true, rating: rating.ok && rating.value !== null ? rating.value : undefined };
+                    })
+                    : undefined;
+
         const payload: CreateMatchRequest = {
             opponentName: opponentName.trim(),
             tournament: tournament.trim() || undefined,
@@ -122,36 +202,43 @@ export default function AddMatchModal({ teamId, onClose, onCreated }: AddMatchMo
             bestOf,
             maps: maps.map(buildMap),
             notes: notes.trim() || undefined,
-            // Only a finished match records who played; the Lineup dialog covers the rest later.
-            lineup: isFinished && players.length > 0
-                ? players.map(p => {
-                    const rating = parsePlayerRating(p.rating);
-                    return { userId: p.userId, played: true, rating: rating.ok && rating.value !== null ? rating.value : undefined };
-                })
-                : undefined,
+            lineup,
         };
 
-        const result = await save.run(() => api.post(`/Matches/${teamId}`, payload), 'Failed to add the match.');
-        if (!result.ok) return;
-        onCreated();
-        onClose();
+        if (!isEdit) {
+            const result = await save.run(() => api.post(`/Matches/${teamId}`, payload), 'Failed to add the match.');
+            if (result.ok) onSaved(`Match vs ${payload.opponentName} added.`);
+            return;
+        }
+
+        const body: UpdateMatchRequest = { ...payload, version: match.version };
+        const result = await save.run(() => api.put<Match>(`/Matches/${teamId}/${match.id}`, body), 'Failed to save the match.');
+        if (result.ok) {
+            onSaved(recordResult ? `Result saved for the match vs ${payload.opponentName}.` : `Match vs ${payload.opponentName} saved.`);
+            return;
+        }
+        // Removed, or changed by someone else: the dialog keeps the message, the list behind reloads.
+        if (result.httpStatus === 404 || result.httpStatus === 409) onStale();
     };
+
+    const title = !isEdit ? 'Add match' : recordResult ? `Add result vs ${match.opponentName}` : `Edit match vs ${match.opponentName}`;
+    const submitLabel = !isEdit ? 'Add match' : recordResult ? 'Save result' : 'Save changes';
 
     return (
         <Modal
             open
             onClose={onClose}
-            title="Add match"
+            title={title}
             busy={isSubmitting}
             closeOnBackdrop={false}
             footer={
                 <>
                     <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-                    <Button type="submit" form="add-match-form" loading={isSubmitting} loadingText="Saving...">Add match</Button>
+                    <Button type="submit" form="match-form" loading={isSubmitting} loadingText="Saving...">{submitLabel}</Button>
                 </>
             }
         >
-            <form id="add-match-form" onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+            <form id="match-form" onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
                 {save.error && <Alert tone="danger">{save.error}</Alert>}
 
                 <SegmentedControl label="Type" value={type} options={TYPE_OPTIONS} onChange={setType} />

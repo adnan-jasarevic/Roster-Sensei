@@ -50,35 +50,51 @@ The client also has `canReceiveOwnership` for the transfer rule. Tests: `TeamRol
 
 ### Match
 
-`MatchStatus` in `RosterSensei.Domain/Entities/Match.cs`: Scheduled, Live, Finished, Cancelled.
+`MatchStatus` in `RosterSensei.Domain/Entities/Match.cs`: Scheduled, Finished, Cancelled. (Live was
+removed: nobody marks a match live for the hour it runs. The `AddMatchVersion` migration moved any
+Live match back to Scheduled.)
 
-**There are no transitions.** A match is created in a status and stays in it: the API has no
-endpoint that edits a match. What a status allows:
+**Any status can move to any other**, by editing the match (`PUT /api/Matches/{teamId}/{matchId}`,
+`MatchService.UpdateMatchAsync`). The Owner, Captain and Officers can edit; an edit follows the same
+rules as adding a match (`UpdateMatchDtoValidator` includes `CreateMatchDtoValidator`).
 
-| Status | Scores | Counts in statistics | Shown as |
-|---|---|---|---|
-| Scheduled | None allowed (`CreateMatchDtoValidator`) | No | "Upcoming" while its time is ahead, "Needs result" once it has passed |
-| Live | Allowed by the API. The form doesn't offer this status. | No | "Live", under All only |
-| Finished | Series score, or worked out from map scores (`MatchService.SeriesScore`) | Yes | Result with outcome |
-| Cancelled | Allowed by the API. The form sends none. | No | Struck through; hidden on the calendar |
+| Status | Scores | Ratings | Counts in statistics | Shown as |
+|---|---|---|---|---|
+| Scheduled | None allowed | None allowed | No | "Upcoming" while its time is ahead, "Needs result" once it has passed |
+| Finished | Series score, or worked out from map scores (`MatchService.SeriesScore`) | Optional, players who played | Yes | Result with outcome |
+| Cancelled | None allowed | None allowed | No | Struck through; hidden on the calendar |
 
-On the client the status is the `MatchStatusName` union, and two functions name the questions
-pages ask: `hasResult` (Finished), `isUpcoming` (Scheduled, time still ahead) and `needsResult`
+| Transition | How | What changes |
+|---|---|---|
+| Scheduled → Finished | "Add result" on a "Needs result" row, or Edit | Scores, maps, played date; who played and their ratings |
+| Finished → Finished | Edit | Corrections to anything |
+| Finished → Scheduled or Cancelled | Edit | Score back to 0 - 0, played date cleared, ratings dropped; the lineup stays |
+| Scheduled ↔ Cancelled | Edit | Status only |
+
+**Two people editing at once:** every match has a `Version`, sent back with an edit. A save from an
+older version is refused with 409 ("Someone else changed this match..."), checked again by the
+database (`IsConcurrencyToken`), so two saves from the same version can't both win. The dialog keeps
+the message and the list behind it reloads.
+
+**The lineup on an edit:** left out, it's kept (minus ratings, if the match is no longer finished).
+Sent, it replaces the old one; its players must be on the team or already in this lineup. The match
+form only shows who played and their ratings, so it sends back roles, unticked substitutes and
+players who have left as they were (`mergeLineup` in `match-modal.tsx`).
+
+On the client the status is the `MatchStatusName` union, and functions name the questions pages
+ask: `hasResult` (Finished), `isUpcoming` (Scheduled, time still ahead) and `needsResult`
 (Scheduled, time passed). Requests send the status as a number (`MatchStatus` constant), responses
 as a name.
 
 "Upcoming" means the same thing everywhere: Scheduled with a time in the future. The dashboard
 applies it on the server (`TeamService.GetTeamDashboardAsync`), the Matches page with `isUpcoming`.
 A Scheduled match whose time has passed is "Needs result": it has its own filter and badge on the
-Matches page. Tests: `e2e/matches.spec.ts`.
+Matches page, and an "Add result" action. Tests: `MatchEditTests`, `MatchEditApiTests`,
+`e2e/matches.spec.ts`, `e2e/match-editing.spec.ts`.
 
-Known gaps, left alone because closing them changes what the product does:
+Known gap, left alone because closing it changes what the API returns:
 
-1. A scheduled match can never become Finished or Cancelled. Recording its result means adding a
-   second match.
-2. "Needs result" can only be looked at for now: recording the result needs the transition above
-   (issue #79).
-3. The API sends `matchOutcome: "Draw"` and `finalScore: "0 - 0"` for a match that isn't finished.
+1. The API sends `matchOutcome: "Draw"` and `finalScore: "0 - 0"` for a match that isn't finished.
    The client only shows them when `hasResult` is true.
 
 ### Calendar event
@@ -167,7 +183,7 @@ dialog carries its own data:
 |---|---|---|
 | Calendar | `ModalState` | closed, create, open, offDay, types |
 | Team roster | `Dialog` | none, invite, role, transfer, kick, leave, delete |
-| Matches | `Dialog` | none, addMatch, lineup |
+| Matches | `Dialog` | none, addMatch, editMatch, lineup |
 
 A dialog is mounted only while it is the open one, so it starts clean every time. Two flags that
 are independent stay two flags: on the Account page the unlink confirmation opens over the change

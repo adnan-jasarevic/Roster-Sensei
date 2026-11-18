@@ -74,7 +74,7 @@ public class MatchStatsTests : IDisposable
     }
 
     [Theory]
-    [InlineData(MatchStatus.Live)]
+    [InlineData(MatchStatus.Scheduled)]
     [InlineData(MatchStatus.Cancelled)]
     public async Task Only_finished_matches_count(MatchStatus status)
     {

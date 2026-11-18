@@ -29,19 +29,7 @@ public class MatchService : IMatchService
         if (member == null || !member.CanManageTeam)
             return Result<MatchDto>.Forbidden("Only the team Owner, Captain or Officers can add matches.");
 
-        var maps = (dto.Maps ?? new List<MatchMapDto>())
-            .Select((map, index) => new MatchMap
-            {
-                Order = index + 1,
-                MapName = map.MapName.Trim(),
-                OurScore = map.OurScore,
-                OpponentScore = map.OpponentScore,
-                OurFirstHalf = map.OurFirstHalf,
-                OpponentFirstHalf = map.OpponentFirstHalf,
-                OurSecondHalf = map.OurSecondHalf,
-                OpponentSecondHalf = map.OpponentSecondHalf
-            })
-            .ToList();
+        var maps = ToMaps(dto.Maps);
 
         var (ourScore, opponentScore) = SeriesScore(maps, dto.BestOf) ?? (dto.OurScore, dto.OpponentScore);
 
@@ -72,6 +60,78 @@ public class MatchService : IMatchService
         var usernames = await _identityService.GetUsernamesByIdsAsync(lineup.Select(p => p.UserId));
         var resultDto = MapToDto(savedMatch, usernames);
         return Result<MatchDto>.SuccessResult(resultDto);
+    }
+
+    private const string EditConflictMessage =
+        "Someone else changed this match while you were editing it. Open it again to see their changes.";
+
+    public async Task<Result<MatchDto>> UpdateMatchAsync(string userId, int teamId, int matchId, UpdateMatchDto dto)
+    {
+        var team = await _teamRepository.GetByIdAsync(teamId);
+        if (team == null)
+            return Result<MatchDto>.NotFound("Team was not found.");
+
+        var member = team.Members.FirstOrDefault(m => m.UserId == userId);
+        if (member == null || !member.CanManageTeam)
+            return Result<MatchDto>.Forbidden("Only the team Owner, Captain or Officers can edit matches.");
+
+        var match = await _matchRepository.GetForEditAsync(teamId, matchId);
+        if (match == null)
+            return Result<MatchDto>.NotFound("Match was not found.");
+        if (match.Version != dto.Version)
+            return Result<MatchDto>.Conflict(EditConflictMessage);
+
+        // A sent lineup replaces the old one. Its players must be on the team, or already in this
+        // lineup: someone who has left since keeps their place in the match's history.
+        List<MatchParticipation>? lineup = null;
+        if (dto.Lineup != null)
+        {
+            lineup = ToParticipations(dto.Lineup);
+            var allowed = team.Members.Select(m => m.UserId).Concat(match.Participations.Select(p => p.UserId)).ToHashSet();
+            if (lineup.Any(p => !allowed.Contains(p.UserId)))
+                return Result<MatchDto>.Failure("Every player in the lineup must be a member of the team.");
+        }
+
+        var maps = ToMaps(dto.Maps);
+        var (ourScore, opponentScore) = SeriesScore(maps, dto.BestOf) ?? (dto.OurScore, dto.OpponentScore);
+
+        match.OpponentName = dto.OpponentName;
+        match.Tournament = dto.Tournament;
+        match.ScheduledDate = dto.ScheduledDate;
+        match.PlayedDate = dto.Status == MatchStatus.Finished ? dto.PlayedDate : null;
+        match.Status = dto.Status;
+        match.Type = dto.Type;
+        match.OurScore = ourScore;
+        match.OpponentScore = opponentScore;
+        match.BestOf = dto.BestOf;
+        match.Notes = dto.Notes;
+
+        match.Maps.Clear();
+        foreach (var map in maps)
+            match.Maps.Add(map);
+
+        if (lineup != null)
+        {
+            match.Participations.Clear();
+            foreach (var player in lineup)
+                match.Participations.Add(player);
+        }
+
+        // Only a finished match keeps ratings: reopening or cancelling one drops them.
+        if (match.Status != MatchStatus.Finished)
+            foreach (var player in match.Participations)
+                player.Rating = null;
+
+        if (!await _matchRepository.UpdateAsync(match, dto.Version))
+        {
+            // Lost the race between loading and saving: tell a removed match and a newer edit apart.
+            if (await _matchRepository.GetForEditAsync(teamId, matchId) == null)
+                return Result<MatchDto>.NotFound("Match was not found. It may have just been removed.");
+            return Result<MatchDto>.Conflict(EditConflictMessage);
+        }
+
+        var usernames = await _identityService.GetUsernamesByIdsAsync(match.Participations.Select(p => p.UserId));
+        return Result<MatchDto>.SuccessResult(MapToDto(match, usernames));
     }
 
     public async Task<Result<List<MatchDto>>> GetTeamMatchesAsync(string userId, int teamId, CancellationToken cancellationToken = default)
@@ -163,6 +223,21 @@ public class MatchService : IMatchService
         return Result<List<MatchLineupEntryDto>>.SuccessResult(ToLineupDto(lineup, usernames));
     }
 
+    private static List<MatchMap> ToMaps(List<MatchMapDto>? maps) =>
+        (maps ?? new List<MatchMapDto>())
+            .Select((map, index) => new MatchMap
+            {
+                Order = index + 1,
+                MapName = map.MapName.Trim(),
+                OurScore = map.OurScore,
+                OpponentScore = map.OpponentScore,
+                OurFirstHalf = map.OurFirstHalf,
+                OpponentFirstHalf = map.OpponentFirstHalf,
+                OurSecondHalf = map.OurSecondHalf,
+                OpponentSecondHalf = map.OpponentSecondHalf
+            })
+            .ToList();
+
     private static List<MatchParticipation> ToParticipations(IEnumerable<LineupPlayerDto> players) =>
         players
             .Select(p => new MatchParticipation
@@ -235,7 +310,8 @@ public class MatchService : IMatchService
                 .ToList(),
             MatchOutcome = match.Outcome.ToString(),
             Notes = match.Notes,
-            Lineup = ToLineupDto(match.Participations, usernames)
+            Lineup = ToLineupDto(match.Participations, usernames),
+            Version = match.Version
         };
     }
 }

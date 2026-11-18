@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
-import { CalendarPlus, Swords, UsersRound } from 'lucide-react';
+import { CalendarPlus, ClipboardCheck, Pencil, Swords, UsersRound } from 'lucide-react';
 import api from '../services/api';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { cx } from '../lib/cx';
 import { formatDateTime } from '../lib/format';
 import { formatPlayerRating } from '../lib/player-ratings';
 import { type LineupEntry, type Match, type MatchMap, type Team, canManageTeam, hasResult, isUpcoming, needsResult } from '../types';
-import AddMatchModal from '../components/add-match-modal';
+import MatchModal from '../components/match-modal';
 import LineupModal from '../components/lineup-modal';
 import { MatchStatusBadge, NeedsResultBadge, OutcomeBadge } from '../components/domain-badges';
 import PageHeader, { PageContainer } from '../components/page-header';
@@ -20,6 +20,8 @@ type Filter = 'all' | 'upcoming' | 'needsResult' | 'results';
 type Dialog =
     | { kind: 'none' }
     | { kind: 'addMatch' }
+    /** recordResult: opened from "Add result", with the status already set to Finished. */
+    | { kind: 'editMatch'; matchId: number; recordResult: boolean }
     | { kind: 'lineup'; matchId: number };
 
 const NO_DIALOG: Dialog = { kind: 'none' };
@@ -71,8 +73,15 @@ function MatchesContent({ team }: { team: Team }) {
     // The time the page was opened. Scheduled matches before it are waiting for a result; the rest are upcoming.
     const [now] = useState(() => new Date());
 
-    // Looked up in the loaded list, so the lineup dialog closes by itself if its match is gone after a reload.
+    // Looked up in the loaded list, so a dialog closes by itself if its match is gone after a reload.
     const lineupMatch = dialog.kind === 'lineup' ? matches?.find(m => m.id === dialog.matchId) : undefined;
+    const editedMatch = dialog.kind === 'editMatch' ? matches?.find(m => m.id === dialog.matchId) : undefined;
+
+    const handleSaved = (message: string) => {
+        closeDialog();
+        toast.success(message);
+        reload();
+    };
 
     // The API returns matches newest first.
     const visibleMatches = (matches ?? []).filter(m => {
@@ -111,13 +120,34 @@ function MatchesContent({ team }: { team: Team }) {
                 ) : (
                     <ul className="divide-y divide-line">
                         {visibleMatches.map(match => (
-                            <MatchRow key={match.id} match={match} overdue={needsResult(match, now)} onEditLineup={canManageMatches ? () => setDialog({ kind: 'lineup', matchId: match.id }) : undefined} />
+                            <MatchRow
+                                key={match.id}
+                                match={match}
+                                overdue={needsResult(match, now)}
+                                actions={canManageMatches ? {
+                                    edit: recordResult => setDialog({ kind: 'editMatch', matchId: match.id, recordResult }),
+                                    editLineup: () => setDialog({ kind: 'lineup', matchId: match.id }),
+                                } : undefined}
+                            />
                         ))}
                     </ul>
                 )}
             </Card>
 
-            {dialog.kind === 'addMatch' && <AddMatchModal teamId={team.id} onClose={closeDialog} onCreated={reload} />}
+            {dialog.kind === 'addMatch' && <MatchModal teamId={team.id} onClose={closeDialog} onSaved={handleSaved} onStale={reload} />}
+
+            {/* Keyed by match, so the form starts from that match every time it opens. */}
+            {editedMatch && dialog.kind === 'editMatch' && (
+                <MatchModal
+                    key={editedMatch.id}
+                    teamId={team.id}
+                    match={editedMatch}
+                    recordResult={dialog.recordResult}
+                    onClose={closeDialog}
+                    onSaved={handleSaved}
+                    onStale={reload}
+                />
+            )}
 
             {/* Keyed by match, so opening another match never carries over picks from the last one. */}
             {lineupMatch && (
@@ -138,7 +168,13 @@ function MatchesContent({ team }: { team: Team }) {
     );
 }
 
-function MatchRow({ match, overdue, onEditLineup }: { match: Match; overdue: boolean; onEditLineup?: () => void }) {
+interface MatchRowActions {
+    /** Opens the match form; with recordResult, as "Add result". */
+    edit: (recordResult: boolean) => void;
+    editLineup: () => void;
+}
+
+function MatchRow({ match, overdue, actions }: { match: Match; overdue: boolean; actions?: MatchRowActions }) {
     const isFinished = hasResult(match);
     const lineup = match.lineup ?? [];
     const details = [
@@ -172,19 +208,42 @@ function MatchRow({ match, overdue, onEditLineup }: { match: Match; overdue: boo
                 </div>
             </div>
 
-            {(lineup.length > 0 || onEditLineup) && (
+            {(lineup.length > 0 || actions) && (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     {lineup.length > 0 ? <Lineup lineup={lineup} opponentName={match.opponentName} /> : <p className="text-xs text-fg-subtle">No lineup recorded.</p>}
-                    {onEditLineup && (
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={onEditLineup}
-                            leftIcon={<UsersRound className="size-4" aria-hidden="true" />}
-                            aria-label={`${lineup.length > 0 ? 'Edit' : 'Set'} lineup for the match vs ${match.opponentName}`}
-                        >
-                            {lineup.length > 0 ? 'Edit lineup' : 'Set lineup'}
-                        </Button>
+                    {actions && (
+                        <div className="flex flex-wrap items-center gap-2 md:ml-auto">
+                            {/* The match waiting for its result gets the action that records it first. */}
+                            {overdue && (
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => actions.edit(true)}
+                                    leftIcon={<ClipboardCheck className="size-4" aria-hidden="true" />}
+                                    aria-label={`Add result for the match vs ${match.opponentName}`}
+                                >
+                                    Add result
+                                </Button>
+                            )}
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => actions.edit(false)}
+                                leftIcon={<Pencil className="size-4" aria-hidden="true" />}
+                                aria-label={`Edit the match vs ${match.opponentName}`}
+                            >
+                                Edit
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={actions.editLineup}
+                                leftIcon={<UsersRound className="size-4" aria-hidden="true" />}
+                                aria-label={`${lineup.length > 0 ? 'Edit' : 'Set'} lineup for the match vs ${match.opponentName}`}
+                            >
+                                {lineup.length > 0 ? 'Edit lineup' : 'Set lineup'}
+                            </Button>
+                        </div>
                     )}
                 </div>
             )}

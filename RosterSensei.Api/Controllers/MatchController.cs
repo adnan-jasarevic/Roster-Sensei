@@ -22,6 +22,11 @@ public class MatchesController : ApiControllerBase
     public async Task<IActionResult> AddMatch(int teamId, [FromBody] CreateMatchDto dto)
         => ToActionResult(await _matchService.AddMatchAsync(UserId, teamId, dto));
 
+    // PUT: /api/Matches/{teamId}/{matchId}  (the whole match, with the version the edit started from)
+    [HttpPut("{teamId}/{matchId}")]
+    public async Task<IActionResult> UpdateMatch(int teamId, int matchId, [FromBody] UpdateMatchDto dto)
+        => ToActionResult(await _matchService.UpdateMatchAsync(UserId, teamId, matchId, dto));
+
     // GET: /api/Matches/{teamId}
     [HttpGet("{teamId}")]
     public async Task<IActionResult> GetTeamMatches(int teamId, CancellationToken cancellationToken)

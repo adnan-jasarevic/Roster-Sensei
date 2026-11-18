@@ -146,7 +146,6 @@ export default function UiKit() {
                     <OutcomeBadge outcome="Win" />
                     <OutcomeBadge outcome="Loss" />
                     <OutcomeBadge outcome="Draw" />
-                    <MatchStatusBadge status="Live" />
                     <MatchStatusBadge status="Scheduled" />
                     <MatchStatusBadge status="Cancelled" />
                     <OwnerBadge />

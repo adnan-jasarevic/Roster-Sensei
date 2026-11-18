@@ -43,6 +43,12 @@ public class CreateMatchDtoValidator : AbstractValidator<CreateMatchDto>
             .OverridePropertyName("Score")
             .WithMessage("A scheduled match cannot have a score yet.");
 
+        RuleFor(m => m)
+            .Must(m => m.OurScore == 0 && m.OpponentScore == 0)
+            .When(m => m.Status == MatchStatus.Cancelled)
+            .OverridePropertyName("Score")
+            .WithMessage("A cancelled match cannot have a score.");
+
         RuleFor(m => m.BestOf)
             .Must(b => AllowedBestOf.Contains(b!.Value))
             .When(m => m.BestOf.HasValue)
@@ -53,8 +59,8 @@ public class CreateMatchDtoValidator : AbstractValidator<CreateMatchDto>
 
         RuleFor(m => m.Maps)
             .Must(maps => maps.All(map => !map.OurScore.HasValue))
-            .When(m => m.Status == MatchStatus.Scheduled && m.Maps != null)
-            .WithMessage("A scheduled match cannot have map scores yet.");
+            .When(m => m.Status != MatchStatus.Finished && m.Maps != null)
+            .WithMessage("Only a finished match can have map scores.");
 
         RuleFor(m => m.Maps)
             .Must((m, maps) => maps.Count <= m.BestOf!.Value)

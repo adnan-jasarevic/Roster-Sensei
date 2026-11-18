@@ -13,6 +13,7 @@ const scheduled = (id: number, opponentName: string, date: string): Match => ({
     maps: [],
     matchOutcome: 'Draw',
     lineup: [],
+    version: 1,
 });
 
 test.describe('match filters', () => {

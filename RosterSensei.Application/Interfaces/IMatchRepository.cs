@@ -18,6 +18,13 @@ public enum LineupWriteOutcome
 public interface IMatchRepository
 {
     Task<Match> AddAsync(Match match);
+
+    // The match with its maps and lineup, tracked for an edit. Null when the team has no such match.
+    Task<Match?> GetForEditAsync(int teamId, int matchId);
+
+    // Saves an edited match if its version is still expectedVersion, and bumps the version.
+    // False when someone else changed or removed the match in the meantime.
+    Task<bool> UpdateAsync(Match match, int expectedVersion);
     // With maps and lineups.
     Task<List<Match>> GetMatchesByTeamIdAsync(int teamId, CancellationToken cancellationToken = default);
 

@@ -15,7 +15,7 @@ public class Match
 
     public DateTime ScheduledDate { get; set; }
     public DateTime? PlayedDate { get; set; }
-    public MatchStatus Status { get; set; }  // Scheduled, Live, Finished
+    public MatchStatus Status { get; set; }  // Scheduled, Finished or Cancelled
     public MatchKind Type { get; set; }
 
     // Series score: rounds for a Bo1, maps won for a longer series
@@ -41,14 +41,18 @@ public class Match
 
     public ICollection<MatchParticipation> Participations { get; set; } = new List<MatchParticipation>();
     public ICollection<MatchStat> TeamStats { get; set; } = new List<MatchStat>();
+
+    // Goes up by one on every edit. An edit sends the version it started from, so a save over
+    // someone else's newer changes is refused instead of silently overwriting them.
+    public int Version { get; set; }
 }
 
+// Stored as these numbers. 1 was "Live", removed: the AddMatchVersion migration turned any Live match into Scheduled.
 public enum MatchStatus
 {
-    Scheduled,
-    Live,
-    Finished,
-    Cancelled
+    Scheduled = 0,
+    Finished = 2,
+    Cancelled = 3
 }
 
 public enum MatchKind
