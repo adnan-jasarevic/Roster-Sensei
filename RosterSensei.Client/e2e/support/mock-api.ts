@@ -117,12 +117,28 @@ export class MockApi {
     invites: TeamInvite[] = [];
     /** The signed-in user's linked SteamID64, or null. */
     steamId: string | null = null;
+    /** Whether that link was made by signing in through Steam. */
+    steamVerified = true;
+    /** Public Steam name and avatar the server would add, when it has an API key. */
+    steamProfile: { personaName: string; avatarUrl: string | null } | null = null;
+    /** The SteamID64 the next Steam sign-in proves, as Steam's own check would. */
+    steamSignInAs = '76561198012345678';
     readonly requests: RecordedRequest[] = [];
     private readonly overrides: { method: string; pattern: RegExp; handler: Handler }[] = [];
     private nextId = 1000;
 
     constructor(teams: MockTeam[] = [team(1, 'Tokyo Ronin')]) {
         this.teams = teams;
+    }
+
+    steamAccount(): SteamAccount {
+        return {
+            steamId: this.steamId,
+            profileUrl: this.steamId ? `https://steamcommunity.com/profiles/${this.steamId}` : null,
+            verified: !!this.steamId && this.steamVerified,
+            personaName: this.steamId ? this.steamProfile?.personaName ?? null : null,
+            avatarUrl: this.steamId ? this.steamProfile?.avatarUrl ?? null : null,
+        };
     }
 
     /** Replaces an endpoint. The newest override wins; return undefined to fall through. */
@@ -151,6 +167,28 @@ export class MockApi {
         let active = true;
         this.on(method, pattern, () => active ? { status, json: message ? { message } : undefined } : undefined);
         return () => { active = false; };
+    }
+
+    /**
+     * Plays Steam's sign-in page: sends the browser straight back to the app's return URL with an
+     * OpenID reply, or a cancel when `cancel` is set. Returns the URLs Steam was opened with.
+     */
+    async fakeSteam(page: Page, { cancel = false } = {}) {
+        const opened: string[] = [];
+        await page.route('https://steamcommunity.com/openid/**', async route => {
+            const url = new URL(route.request().url());
+            opened.push(url.toString());
+            const back = new URL(url.searchParams.get('openid.return_to')!);
+            back.searchParams.set('openid.ns', 'http://specs.openid.net/auth/2.0');
+            back.searchParams.set('openid.mode', cancel ? 'cancel' : 'id_res');
+            if (!cancel) {
+                back.searchParams.set('openid.return_to', url.searchParams.get('openid.return_to')!);
+                back.searchParams.set('openid.claimed_id', `https://steamcommunity.com/openid/id/${this.steamSignInAs}`);
+                back.searchParams.set('openid.sig', 'c2ln');
+            }
+            await route.fulfill({ status: 302, headers: { location: back.toString() } });
+        });
+        return opened;
     }
 
     requestsTo(method: string, pattern: RegExp) {
@@ -386,24 +424,29 @@ export class MockApi {
         }
 
         if (path === '/Account/steam') {
-            const dto = (): SteamAccount => ({
-                steamId: this.steamId,
-                profileUrl: this.steamId ? `https://steamcommunity.com/profiles/${this.steamId}` : null,
-            });
-            if (method === 'GET') return { json: dto() };
+            if (method === 'GET') return { json: this.steamAccount() };
             if (method === 'DELETE') {
                 this.steamId = null;
+                this.steamVerified = false;
                 return { json: { message: 'Steam account unlinked.' } };
             }
-            if (method === 'PUT') {
-                // Only the two forms the tests use; the API also reads STEAM_0 and [U:1:N] IDs.
-                const match = String(body?.steam ?? '').trim().match(/^(?:https?:\/\/steamcommunity\.com\/profiles\/)?(7656119\d{10})\/?$/);
-                if (!match) {
-                    return { status: 400, json: { errors: { Steam: ['Enter your SteamID64 (17 digits), your steamcommunity.com/profiles/ URL, or a STEAM_0:X:Y or [U:1:N] ID.'] } } };
-                }
-                this.steamId = match[1];
-                return { json: dto() };
+        }
+
+        if (path === '/Account/steam/sign-in' && method === 'POST') {
+            // The real API checks the return URL's origin and adds a one-time state to it.
+            const returnTo = `${String(body?.returnUrl)}?rs_state=STATE`;
+            return { json: { redirectUrl: `https://steamcommunity.com/openid/login?openid.mode=checkid_setup&openid.return_to=${encodeURIComponent(returnTo)}` } };
+        }
+
+        if (path === '/Account/steam/sign-in/complete' && method === 'POST') {
+            const parameters = (body?.parameters ?? {}) as Record<string, string>;
+            if (parameters['openid.mode'] === 'cancel') return { status: 400, json: { message: 'Steam sign-in was cancelled.' } };
+            if (!String(parameters['openid.return_to'] ?? '').includes('rs_state=STATE')) {
+                return { status: 400, json: { message: 'This Steam sign-in expired or was already used. Please sign in through Steam again.' } };
             }
+            this.steamId = this.steamSignInAs;
+            this.steamVerified = true;
+            return { json: this.steamAccount() };
         }
 
         if ((m = path.match(/^\/teams\/(\d+)\/events$/i))) {

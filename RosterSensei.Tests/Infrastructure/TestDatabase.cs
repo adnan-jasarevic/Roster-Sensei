@@ -32,8 +32,17 @@ public sealed class TestDatabase : IDisposable
     public TeamService TeamService()
     {
         var context = CreateContext();
-        return new TeamService(new TeamRepository(context), new FakeIdentityService(context));
+        return new TeamService(new TeamRepository(context), new FakeIdentityService(context), SteamProfiles);
     }
+
+    // Steam stand-ins shared by every service this database hands out.
+    public FakeSteamOpenIdVerifier SteamOpenId { get; } = new();
+    public FakeSteamProfiles SteamProfiles { get; } = new();
+    public FakeTime Time { get; } = new();
+    public const string FrontendOrigin = "http://localhost:5173";
+
+    private RosterSensei.Application.Common.SteamSignInStates? _steamStates;
+    public RosterSensei.Application.Common.SteamSignInStates SteamStates => _steamStates ??= new(Time);
 
     public MatchService MatchService()
     {
@@ -72,7 +81,12 @@ public sealed class TestDatabase : IDisposable
         return context.TeamEventTypes.Where(t => t.TeamId == teamId && t.Preset == preset).Select(t => t.Id).Single();
     }
 
-    public AccountService AccountService() => new(new UserRepository(CreateContext()));
+    public AccountService AccountService() => new(
+        new UserRepository(CreateContext()),
+        SteamOpenId,
+        SteamProfiles,
+        SteamStates,
+        new RosterSensei.Application.Common.SteamSignInSettings([FrontendOrigin]));
 
     public string AddUser(string name)
     {

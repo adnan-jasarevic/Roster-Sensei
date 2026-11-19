@@ -10,21 +10,11 @@ public static partial class SteamId
     private const ulong IndividualBase = 76561197960265728UL;
     private const ulong MaxAccountNumber = uint.MaxValue;
 
-    public const string FormatHint =
-        "Enter your SteamID64 (17 digits), your steamcommunity.com/profiles/ URL, or a STEAM_0:X:Y or [U:1:N] ID.";
-
-    public const string CustomUrlHint =
-        "Custom steamcommunity.com/id/ URLs can't be looked up yet. " +
-        "Open your Steam profile and copy the steamcommunity.com/profiles/ URL or your 17-digit SteamID64 instead.";
-
     [GeneratedRegex(@"^\d{17}$")]
     private static partial Regex SteamId64Pattern();
 
     [GeneratedRegex(@"^(?:https?://)?(?:www\.)?steamcommunity\.com/profiles/(\d{17})/?(?:[?#].*)?$", RegexOptions.IgnoreCase)]
     private static partial Regex ProfileUrlPattern();
-
-    [GeneratedRegex(@"^(?:https?://)?(?:www\.)?steamcommunity\.com/id/[^/?#]+/?(?:[?#].*)?$", RegexOptions.IgnoreCase)]
-    private static partial Regex CustomUrlPattern();
 
     // STEAM_X:Y:Z, where the account number is Z * 2 + Y.
     [GeneratedRegex(@"^STEAM_[0-5]:([01]):(\d{1,10})$", RegexOptions.IgnoreCase)]
@@ -33,9 +23,6 @@ public static partial class SteamId
     // [U:1:N], where N is the account number.
     [GeneratedRegex(@"^\[?U:1:(\d{1,10})\]?$", RegexOptions.IgnoreCase)]
     private static partial Regex SteamId3Pattern();
-
-    public static bool IsCustomProfileUrl(string? input) =>
-        input != null && CustomUrlPattern().IsMatch(input.Trim());
 
     public static bool TryParse(string? input, out string steamId64)
     {

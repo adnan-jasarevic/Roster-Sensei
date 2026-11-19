@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowRightLeft, EllipsisVertical, Gamepad2, LogOut, MailPlus, Shield, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
+import { ArrowRightLeft, EllipsisVertical, Gamepad2, LogOut, MailPlus, Shield, ShieldAlert, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
 import api from '../services/api';
 import { useAction } from '../hooks/use-action';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
@@ -176,7 +176,7 @@ function RosterContent({ team }: { team: Team }) {
                                 <tr key={member.id} className="transition-colors hover:bg-hover">
                                     <td className="px-4 py-3 lg:px-5">
                                         <div className="flex min-w-0 items-center gap-3">
-                                            <Avatar name={member.username} className="max-sm:hidden" />
+                                            <Avatar name={member.username} imageUrl={member.steamAvatarUrl} className="max-sm:hidden" />
                                             <div className="min-w-0">
                                                 <p className="flex min-w-0 items-center gap-1.5">
                                                     <span className="truncate font-semibold text-fg">{member.username}</span>
@@ -185,12 +185,18 @@ function RosterContent({ team }: { team: Team }) {
                                                             href={member.steamProfileUrl}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            title={`${member.username}'s Steam profile`}
-                                                            className="inline-flex shrink-0 items-center gap-1 rounded px-1 text-xs font-semibold text-fg-subtle hover:bg-hover hover:text-fg"
+                                                            title={member.steamVerified
+                                                                ? `${member.username}'s Steam profile`
+                                                                : `${member.username}'s Steam profile (unverified: added by pasting an ID, not by signing in through Steam)`}
+                                                            className="inline-flex min-w-0 shrink items-center gap-1 rounded px-1 text-xs font-semibold text-fg-subtle hover:bg-hover hover:text-fg"
                                                         >
-                                                            <Gamepad2 className="size-3.5" aria-hidden="true" />
-                                                            Steam
-                                                            <span className="sr-only">profile of {member.username} (opens in a new tab)</span>
+                                                            {member.steamVerified
+                                                                ? <Gamepad2 className="size-3.5 shrink-0" aria-hidden="true" />
+                                                                : <ShieldAlert className="size-3.5 shrink-0 text-warning" aria-hidden="true" />}
+                                                            <span className="truncate">{member.steamPersonaName || 'Steam'}</span>
+                                                            <span className="sr-only">
+                                                                {member.steamPersonaName ? ' on Steam, ' : ' '}profile of {member.username}{member.steamVerified ? '' : ', unverified'} (opens in a new tab)
+                                                            </span>
                                                         </a>
                                                     )}
                                                 </p>

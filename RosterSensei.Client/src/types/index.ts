@@ -97,10 +97,20 @@ export interface SetLineupRequest {
 export const LINEUP_MAX_PLAYERS = 10;
 export const LINEUP_MAX_ROLE_LENGTH = 30;
 
-/** The signed-in user's linked Steam account. Both fields are null when none is linked. */
+/** The signed-in user's linked Steam account. steamId and profileUrl are null when none is linked. */
 export interface SteamAccount {
     steamId: string | null;
     profileUrl: string | null;
+    /** True when linked by signing in through Steam; false for links pasted before sign-in existed. */
+    verified: boolean;
+    /** Public Steam name and avatar, when the server has a Steam Web API key. */
+    personaName?: string | null;
+    avatarUrl?: string | null;
+}
+
+/** POST /Account/steam/sign-in: the Steam page to send the browser to. */
+export interface SteamSignInStarted {
+    redirectUrl: string;
 }
 
 export interface MatchResponse {
@@ -132,6 +142,11 @@ export interface TeamMember {
     /** SteamID64 and profile link of the member's linked Steam account, or null. */
     steamId?: string | null;
     steamProfileUrl?: string | null;
+    /** True when the member proved the Steam account is theirs by signing in through Steam. */
+    steamVerified?: boolean;
+    /** Public Steam name and avatar, when the server has a Steam Web API key. */
+    steamPersonaName?: string | null;
+    steamAvatarUrl?: string | null;
 }
 
 export interface AddTeamMemberRequest {
