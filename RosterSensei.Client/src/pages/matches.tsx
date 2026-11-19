@@ -1,13 +1,15 @@
 import { useCallback, useState } from 'react';
-import { CalendarPlus, ClipboardCheck, Pencil, Swords, UsersRound } from 'lucide-react';
+import { CalendarPlus, ClipboardCheck, ListOrdered, Pencil, Swords, UsersRound } from 'lucide-react';
 import api from '../services/api';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { cx } from '../lib/cx';
 import { formatDateTime } from '../lib/format';
 import { formatPlayerRating } from '../lib/player-ratings';
-import { type LineupEntry, type Match, type MatchMap, type Team, canManageTeam, hasResult, isUpcoming, needsResult } from '../types';
+import { type LineupEntry, type Match, type Team, canManageTeam, hasResult, isUpcoming, needsResult } from '../types';
 import MatchModal from '../components/match-modal';
 import LineupModal from '../components/lineup-modal';
+import MatchDetailsModal from '../components/match-details-modal';
+import { MapChip } from '../components/map-chip';
 import { MatchStatusBadge, NeedsResultBadge, OutcomeBadge } from '../components/domain-badges';
 import PageHeader, { PageContainer } from '../components/page-header';
 import { ListSkeleton } from '../components/page-skeletons';
@@ -22,7 +24,8 @@ type Dialog =
     | { kind: 'addMatch' }
     /** recordResult: opened from "Add result", with the status already set to Finished. */
     | { kind: 'editMatch'; matchId: number; recordResult: boolean }
-    | { kind: 'lineup'; matchId: number };
+    | { kind: 'lineup'; matchId: number }
+    | { kind: 'details'; matchId: number };
 
 const NO_DIALOG: Dialog = { kind: 'none' };
 
@@ -38,16 +41,6 @@ const EMPTY_TITLES: Record<Filter, string> = {
     upcoming: 'Nothing scheduled',
     needsResult: 'Nothing is waiting for a result',
     results: 'No results yet',
-};
-
-// "7-5, 6-6 +OT" style summary of a map's halves, or empty when halves weren't recorded.
-const halvesText = (map: MatchMap) => {
-    if (map.ourFirstHalf == null || map.opponentFirstHalf == null || map.ourSecondHalf == null || map.opponentSecondHalf == null)
-        return '';
-    const regulation = map.ourFirstHalf + map.ourSecondHalf + map.opponentFirstHalf + map.opponentSecondHalf;
-    const total = (map.ourScore ?? 0) + (map.opponentScore ?? 0);
-    const overtime = total > regulation ? ' +OT' : '';
-    return `${map.ourFirstHalf}-${map.opponentFirstHalf}, ${map.ourSecondHalf}-${map.opponentSecondHalf}${overtime}`;
 };
 
 export default function Matches() {
@@ -76,6 +69,7 @@ function MatchesContent({ team }: { team: Team }) {
     // Looked up in the loaded list, so a dialog closes by itself if its match is gone after a reload.
     const lineupMatch = dialog.kind === 'lineup' ? matches?.find(m => m.id === dialog.matchId) : undefined;
     const editedMatch = dialog.kind === 'editMatch' ? matches?.find(m => m.id === dialog.matchId) : undefined;
+    const detailsMatch = dialog.kind === 'details' ? matches?.find(m => m.id === dialog.matchId) : undefined;
 
     const handleSaved = (message: string) => {
         closeDialog();
@@ -124,6 +118,7 @@ function MatchesContent({ team }: { team: Team }) {
                                 key={match.id}
                                 match={match}
                                 overdue={needsResult(match, now)}
+                                onShowDetails={() => setDialog({ kind: 'details', matchId: match.id })}
                                 actions={canManageMatches ? {
                                     edit: recordResult => setDialog({ kind: 'editMatch', matchId: match.id, recordResult }),
                                     editLineup: () => setDialog({ kind: 'lineup', matchId: match.id }),
@@ -146,6 +141,15 @@ function MatchesContent({ team }: { team: Team }) {
                     onClose={closeDialog}
                     onSaved={handleSaved}
                     onStale={reload}
+                />
+            )}
+
+            {detailsMatch && (
+                <MatchDetailsModal
+                    key={detailsMatch.id}
+                    match={detailsMatch}
+                    onClose={closeDialog}
+                    onEditLineup={canManageMatches ? () => setDialog({ kind: 'lineup', matchId: detailsMatch.id }) : undefined}
                 />
             )}
 
@@ -174,7 +178,15 @@ interface MatchRowActions {
     editLineup: () => void;
 }
 
-function MatchRow({ match, overdue, actions }: { match: Match; overdue: boolean; actions?: MatchRowActions }) {
+interface MatchRowProps {
+    match: Match;
+    overdue: boolean;
+    onShowDetails: () => void;
+    /** Left out for members who can't change matches. */
+    actions?: MatchRowActions;
+}
+
+function MatchRow({ match, overdue, onShowDetails, actions }: MatchRowProps) {
     const isFinished = hasResult(match);
     const lineup = match.lineup ?? [];
     const details = [
@@ -208,11 +220,11 @@ function MatchRow({ match, overdue, actions }: { match: Match; overdue: boolean;
                 </div>
             </div>
 
-            {(lineup.length > 0 || actions) && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    {lineup.length > 0 ? <Lineup lineup={lineup} opponentName={match.opponentName} /> : <p className="text-xs text-fg-subtle">No lineup recorded.</p>}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                {lineup.length > 0 ? <Lineup lineup={lineup} opponentName={match.opponentName} /> : <p className="text-xs text-fg-subtle">No lineup recorded.</p>}
+                <div className="flex flex-wrap items-center gap-2 md:ml-auto">
                     {actions && (
-                        <div className="flex flex-wrap items-center gap-2 md:ml-auto">
+                        <>
                             {/* The match waiting for its result gets the action that records it first. */}
                             {overdue && (
                                 <Button
@@ -243,26 +255,19 @@ function MatchRow({ match, overdue, actions }: { match: Match; overdue: boolean;
                             >
                                 {lineup.length > 0 ? 'Edit lineup' : 'Set lineup'}
                             </Button>
-                        </div>
+                        </>
                     )}
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={onShowDetails}
+                        leftIcon={<ListOrdered className="size-4" aria-hidden="true" />}
+                        aria-label={`Details of the match vs ${match.opponentName}`}
+                    >
+                        Details
+                    </Button>
                 </div>
-            )}
-        </li>
-    );
-}
-
-function MapChip({ map }: { map: MatchMap }) {
-    const played = map.ourScore != null && map.opponentScore != null;
-    const halves = halvesText(map);
-    const scoreClass = !played || map.ourScore === map.opponentScore
-        ? 'text-fg-muted'
-        : map.ourScore! > map.opponentScore! ? 'text-success' : 'text-danger';
-
-    return (
-        <li className="rounded border border-line bg-sunken px-2 py-1 text-xs text-fg-muted">
-            {map.mapName}
-            {played && <span className={cx('ml-1.5 font-bold tabular-nums', scoreClass)}>{map.ourScore}-{map.opponentScore}</span>}
-            {halves && <span className="ml-1.5 text-fg-subtle tabular-nums">({halves})</span>}
+            </div>
         </li>
     );
 }

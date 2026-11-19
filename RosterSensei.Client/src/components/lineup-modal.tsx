@@ -3,6 +3,7 @@ import api from '../services/api';
 import { useAction } from '../hooks/use-action';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { formatPlayerRating, parsePlayerRating } from '../lib/player-ratings';
+import { EMPTY_STATS, statsError, statsToRequest, statsToTyped, type TypedStats } from '../lib/match-stats';
 import {
     hasResult,
     LINEUP_MAX_PLAYERS,
@@ -12,6 +13,7 @@ import {
     type SetLineupRequest,
     type TeamMember,
 } from '../types';
+import PlayerStatInputs from './player-stat-inputs';
 import { Alert, Button, Checkbox, ErrorState, Field, Input, LoadingRegion, Modal, Skeleton } from './ui';
 
 interface LineupModalProps {
@@ -30,6 +32,8 @@ interface Pick {
     played: boolean;
     /** As typed; empty means not rated. */
     rating: string;
+    /** Kills, deaths, assists, ADR and HS% as typed; empty means not recorded. */
+    stats: TypedStats;
 }
 
 /** What's wrong with a typed rating, or undefined when it's fine (or empty). */
@@ -52,11 +56,12 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
             role: entry.role ?? '',
             played: entry.played,
             rating: entry.rating != null ? formatPlayerRating(entry.rating) : '',
+            stats: statsToTyped(entry),
         })),
     );
     const save = useAction();
     const [showErrors, setShowErrors] = useState(false);
-    // Only a finished match can be rated, and only players who played.
+    // Only a finished match can be rated or get stats, and only players who played.
     const canRate = hasResult(match);
     const isSaving = save.isRunning;
 
@@ -73,7 +78,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
     const toggle = (userId: string) => {
         setPicks(current => current.some(p => p.userId === userId)
             ? current.filter(p => p.userId !== userId)
-            : [...current, { userId, role: '', played: true, rating: '' }]);
+            : [...current, { userId, role: '', played: true, rating: '', stats: EMPTY_STATS }]);
     };
 
     const update = (userId: string, change: Partial<Pick>) => {
@@ -83,7 +88,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
         if (!members) return;
-        if (canRate && currentPicks.some(p => p.played && ratingErrorOf(p.rating))) {
+        if (canRate && currentPicks.some(p => p.played && (ratingErrorOf(p.rating) || statsError(p.stats)))) {
             save.reset();
             setShowErrors(true);
             return;
@@ -97,6 +102,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
                     role: p.role.trim() || undefined,
                     played: p.played,
                     rating: canRate && p.played && rating.ok && rating.value !== null ? rating.value : undefined,
+                    ...(canRate && p.played ? statsToRequest(p.stats) : {}),
                 };
             }),
         };
@@ -118,7 +124,8 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
             open
             onClose={onClose}
             title={`Lineup vs ${match.opponentName}`}
-            description={`Pick up to ${LINEUP_MAX_PLAYERS} players. Untick "Played" for a substitute who didn't play. Roles${canRate ? ' and ratings (0.01 to 99.99)' : ''} are optional.`}
+            description={`Pick up to ${LINEUP_MAX_PLAYERS} players. Untick "Played" for a substitute who didn't play. Roles${canRate ? ', ratings (0.01 to 99.99) and the scoreboard line for the whole match' : ''} are optional.`}
+            size={canRate ? 'lg' : 'md'}
             busy={isSaving}
             closeOnBackdrop={false}
             footer={
@@ -153,51 +160,63 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
                         {(members ?? []).map(member => {
                             const pick = pickFor(member.id);
                             return (
-                                <li key={member.id} className="flex flex-col gap-2 p-2 sm:flex-row sm:items-center">
-                                    <Checkbox
-                                        label={<span className="truncate font-semibold text-fg">{member.username}</span>}
-                                        checked={!!pick}
-                                        disabled={!pick && isFull}
-                                        onChange={() => toggle(member.id)}
-                                        className="min-w-0 sm:w-44 sm:shrink-0"
-                                    />
-                                    {pick && (
-                                        <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2 pl-8 sm:flex-nowrap sm:pl-0">
-                                            <Field label={`Role of ${member.username}`} hideLabel className="flex-1">
-                                                <Input
-                                                    value={pick.role}
-                                                    onChange={e => update(member.id, { role: e.target.value })}
-                                                    maxLength={LINEUP_MAX_ROLE_LENGTH}
-                                                    placeholder="Role, e.g. AWP"
-                                                    autoComplete="off"
-                                                    className="h-9"
-                                                />
-                                            </Field>
-                                            <Checkbox
-                                                label="Played"
-                                                aria-label={`${member.username} played`}
-                                                checked={pick.played}
-                                                // A substitute who didn't play can't keep a rating.
-                                                onChange={e => update(member.id, e.target.checked ? { played: true } : { played: false, rating: '' })}
-                                                className="mt-1.5 shrink-0"
-                                            />
-                                            {canRate && pick.played && (
-                                                <Field
-                                                    label={`Rating of ${member.username}`}
-                                                    hideLabel
-                                                    error={showErrors ? ratingErrorOf(pick.rating) : undefined}
-                                                    className="w-28 shrink-0"
-                                                >
+                                <li key={member.id} className="flex flex-col gap-2 p-2">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                        <Checkbox
+                                            label={<span className="truncate font-semibold text-fg">{member.username}</span>}
+                                            checked={!!pick}
+                                            disabled={!pick && isFull}
+                                            onChange={() => toggle(member.id)}
+                                            className="min-w-0 sm:w-44 sm:shrink-0"
+                                        />
+                                        {pick && (
+                                            <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2 pl-8 sm:flex-nowrap sm:pl-0">
+                                                <Field label={`Role of ${member.username}`} hideLabel className="flex-1">
                                                     <Input
-                                                        value={pick.rating}
-                                                        onChange={e => update(member.id, { rating: e.target.value })}
-                                                        inputMode="decimal"
-                                                        placeholder="Rating"
+                                                        value={pick.role}
+                                                        onChange={e => update(member.id, { role: e.target.value })}
+                                                        maxLength={LINEUP_MAX_ROLE_LENGTH}
+                                                        placeholder="Role, e.g. AWP"
                                                         autoComplete="off"
                                                         className="h-9"
                                                     />
                                                 </Field>
-                                            )}
+                                                <Checkbox
+                                                    label="Played"
+                                                    aria-label={`${member.username} played`}
+                                                    checked={pick.played}
+                                                    // A substitute who didn't play can't keep a rating or stats.
+                                                    onChange={e => update(member.id, e.target.checked ? { played: true } : { played: false, rating: '', stats: EMPTY_STATS })}
+                                                    className="mt-1.5 shrink-0"
+                                                />
+                                                {canRate && pick.played && (
+                                                    <Field
+                                                        label={`Rating of ${member.username}`}
+                                                        hideLabel
+                                                        error={showErrors ? ratingErrorOf(pick.rating) : undefined}
+                                                        className="w-28 shrink-0"
+                                                    >
+                                                        <Input
+                                                            value={pick.rating}
+                                                            onChange={e => update(member.id, { rating: e.target.value })}
+                                                            inputMode="decimal"
+                                                            placeholder="Rating"
+                                                            autoComplete="off"
+                                                            className="h-9"
+                                                        />
+                                                    </Field>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {canRate && pick?.played && (
+                                        <div className="pl-8 sm:pl-[11.5rem]">
+                                            <PlayerStatInputs
+                                                username={member.username}
+                                                value={pick.stats}
+                                                onChange={change => update(member.id, { stats: { ...pick.stats, ...change } })}
+                                                showErrors={showErrors}
+                                            />
                                         </div>
                                     )}
                                 </li>

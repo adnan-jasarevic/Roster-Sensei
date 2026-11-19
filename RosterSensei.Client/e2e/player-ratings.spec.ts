@@ -124,16 +124,16 @@ test.describe('Player statistics', () => {
     const section = (page: import('@playwright/test').Page) => page.getByRole('region', { name: 'Player statistics', exact: true });
     const players = (page: import('@playwright/test').Page) => section(page).getByRole('rowheader');
 
-    test('lists every rated player, best average first, and the headers sort', async ({ page, api }) => {
+    test('lists every player who played, best average rating first, and the headers sort', async ({ page, api }) => {
         withRatedMatches(api);
         await api.install(page);
         await page.goto('/statistics');
 
         await expect(players(page)).toHaveText(['kenji', 'sensei', 'mika']);
         const kenji = section(page).getByRole('row', { name: /^kenji/ });
-        // Matches, average, form (last 5), best, worst.
-        await expect(kenji.getByRole('cell')).toHaveText(['4', '1.30', '1.30', '2.10', '0.70']);
-        await expect(section(page).getByText('3 players · 4 rated matches')).toBeVisible();
+        // Matches, win rate, K/D, ADR, HS% (none recorded here), rating, form (last 5), best, worst.
+        await expect(kenji.getByRole('cell')).toHaveText(['4', '100%', '–', '–', '–', '1.30', '1.30', '2.10', '0.70']);
+        await expect(section(page).getByText('3 players · 4 matches')).toBeVisible();
 
         await section(page).getByRole('button', { name: 'Player' }).click();
         await expect(players(page)).toHaveText(['kenji', 'mika', 'sensei']);
@@ -142,7 +142,7 @@ test.describe('Player statistics', () => {
         await expect(section(page).getByRole('columnheader', { name: 'Matches' })).toHaveAttribute('aria-sort', 'descending');
     });
 
-    test('filters by period, map and number of rated matches', async ({ page, api }) => {
+    test('filters by period, map and number of matches played', async ({ page, api }) => {
         withRatedMatches(api);
         await api.install(page);
         await page.goto('/statistics');
@@ -150,17 +150,18 @@ test.describe('Player statistics', () => {
 
         await section(page).getByRole('radio', { name: '30 days' }).check({ force: true });
         await expect(players(page)).toHaveText(['kenji', 'sensei', 'mika']);
-        await expect(section(page).getByRole('row', { name: /^kenji/ }).getByRole('cell').nth(1)).toHaveText('1.20');
+        await expect(section(page).getByRole('row', { name: /^kenji/ }).getByRole('cell').nth(5)).toHaveText('1.20');
 
         await section(page).getByRole('radio', { name: 'All time' }).check({ force: true });
         await chooseOption(page, section(page).getByRole('combobox', { name: 'Map' }), 'Mirage');
         await expect(players(page)).toHaveText(['sensei', 'kenji', 'mika']);
 
         await chooseOption(page, section(page).getByRole('combobox', { name: 'Map' }), 'All maps');
-        await chooseOption(page, section(page).getByRole('combobox', { name: 'Rated matches' }), 'At least 3');
+        // sensei played two matches (one unrated), so needs "any number".
+        await chooseOption(page, section(page).getByRole('combobox', { name: 'Matches played' }), 'At least 3');
         await expect(players(page)).toHaveText(['kenji', 'mika']);
 
-        await chooseOption(page, section(page).getByRole('combobox', { name: 'Rated matches' }), 'At least 10');
+        await chooseOption(page, section(page).getByRole('combobox', { name: 'Matches played' }), 'At least 10');
         await expect(section(page).getByText('No players match these filters')).toBeVisible();
         await section(page).getByRole('button', { name: 'Clear filters' }).first().click();
         await expect(players(page)).toHaveText(['kenji', 'sensei', 'mika']);
@@ -176,11 +177,11 @@ test.describe('Player statistics', () => {
         await expect(players(page)).toHaveText(['mika', 'kenji']);
     });
 
-    test('explains where ratings come from when there are none yet', async ({ page, api }) => {
+    test('explains where player statistics come from when no lineup is recorded yet', async ({ page, api }) => {
         api.teams = [team(1, 'Tokyo Ronin', 'Captain', true, { matches: [finishedMatch(1, 'Kyoto Kitsune', 13, 9, daysAgo(3))] })];
         await api.install(page);
         await page.goto('/statistics');
 
-        await expect(section(page).getByText('No player ratings yet')).toBeVisible();
+        await expect(section(page).getByText('No player statistics yet')).toBeVisible();
     });
 });

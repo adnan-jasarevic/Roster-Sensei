@@ -75,9 +75,10 @@ const controlClasses = cx(
     'disabled:cursor-not-allowed disabled:border-line disabled:text-fg-muted',
 );
 
-export function Input({ id, required, className, 'aria-describedby': describedBy, ...props }: ComponentPropsWithRef<'input'>) {
+export function Input({ id, required, className, 'aria-describedby': describedBy, 'aria-invalid': invalid, ...props }: ComponentPropsWithRef<'input'>) {
     const control = useFieldControl(id, required, describedBy);
-    return <input {...props} {...control} className={cx(controlClasses, 'read-only:bg-transparent h-11 px-3', className)} />;
+    // Outside a Field (or alongside one), an explicit aria-invalid still marks the input.
+    return <input {...props} {...control} aria-invalid={control['aria-invalid'] ?? invalid} className={cx(controlClasses, 'read-only:bg-transparent h-11 px-3', className)} />;
 }
 
 export function Textarea({ id, required, className, rows = 3, 'aria-describedby': describedBy, ...props }: ComponentPropsWithRef<'textarea'>) {

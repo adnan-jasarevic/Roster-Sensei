@@ -78,6 +78,17 @@ export interface LineupEntry {
     played: boolean;
     /** 0.01 to 99.99. Null when not rated; only players who played in a finished match can be. */
     rating: number | null;
+    /**
+     * The scoreboard line for the whole match (all maps together). Same rules as the rating, each
+     * value optional. The API always sends them; null (or missing) means not recorded.
+     */
+    kills?: number | null;
+    deaths?: number | null;
+    assists?: number | null;
+    /** Average damage per round, one decimal. */
+    adr?: number | null;
+    /** 0 to 100, one decimal. */
+    headshotPercentage?: number | null;
 }
 
 /** One player sent in a lineup: by the Lineup dialog, or with the result in Add Match. */
@@ -86,6 +97,11 @@ export interface LineupPlayer {
     role?: string;
     played: boolean;
     rating?: number;
+    kills?: number;
+    deaths?: number;
+    assists?: number;
+    adr?: number;
+    headshotPercentage?: number;
 }
 
 /** Body of PUT /Matches/{teamId}/{matchId}/lineup. Replaces the whole lineup; an empty list clears it. */

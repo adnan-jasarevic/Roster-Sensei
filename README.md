@@ -16,7 +16,9 @@ A web app for amateur Counter-Strike 2 teams to manage their roster, schedule ma
 - **Matches:** schedule or record matches with opponent, tournament, format (Bo1/Bo2/Bo3/Bo5), maps in play order, score and notes. Filter by upcoming, needs result or results. Any match can be edited later: a scheduled match whose time has passed shows "Needs result" with an **Add result** button, and results can be corrected or a match cancelled. If someone else saved the match after you opened it, your save is refused instead of overwriting theirs.
 - **Lineups:** the Owner, Captain and Officers record who played each match from the Lineup dialog on the Matches page, with an optional free-text role and whether they played or sat on the bench. The match list shows each lineup.
 - **Player ratings:** when adding a finished match, tick who played and optionally give each a rating from 0.01 to 99.99 (a comma works as the decimal point). Ratings can be added or corrected later in a match's lineup, only for players who played in a finished match.
-- **Player statistics:** a section of the Statistics tab with each player's rated matches, average, form (last 5 rated matches), best and worst rating. Filters: match type (the tab's switch), period, map and a minimum number of rated matches. Columns sort.
+- **Player stats per match:** the Lineup dialog of a finished match also takes each player's kills, deaths, assists, ADR and HS% for the whole match. Every value is optional.
+- **Match details:** every member can open a match's details from the Matches page: result, maps, notes, and a scoreboard of the players who played (K, D, A, +/-, K/D, ADR, HS%, rating) with the team's totals.
+- **Player statistics:** a section of the Statistics tab with each player's matches played, win rate, K/D, average ADR and HS%, and their rating average, form (last 5 rated matches), best and worst. Filters: match type (the tab's switch), period, map and a minimum number of matches played. Columns sort; a player without a value goes last.
 - **Calendar:** plan praccs, official matches, VOD reviews and more in month, week, day and agenda views.
   - **Event types:** each team picks its own. New teams start with Pracc, Official Match, VOD Review, Theory and Other; Scrim, Recorded Match, Break, Warmup and Meet can be added, as can custom types. Types can be renamed, recoloured and removed. Removing a type keeps its events and moves them to Other, which every team always has and which can't be changed.
   - **Recorded matches:** with the Recorded Match type on, matches from the Matches page show on the calendar, and one that starts during a Scrim or Official Match event takes that event's place.
@@ -137,6 +139,5 @@ GitHub Actions runs on every pull request and on every push to `master`: it buil
 
 Planned features:
 
-- [Match participation](https://github.com/adnan-jasarevic/Roster-Sensei/issues/18): a lineup picker in the app (the API is done)
-- [Player stats per match](https://github.com/adnan-jasarevic/Roster-Sensei/issues/19)
+- [Player stats per match](https://github.com/adnan-jasarevic/Roster-Sensei/issues/19): importing stats from demo files or a stats service instead of typing them in
 - [Link a Steam account](https://github.com/adnan-jasarevic/Roster-Sensei/issues/20)

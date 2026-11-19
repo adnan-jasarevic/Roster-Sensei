@@ -1,5 +1,5 @@
 import type { Page, Request, Route } from '@playwright/test';
-import type { LineupEntry, MapPool, MapRating, MapSide, Match, SteamAccount, Team, TeamDashboardData, TeamEvent, TeamEventType, TeamInvite, TeamMember, TeamOffDay, TeamStats } from '../../src/types';
+import type { LineupEntry, LineupPlayer, MapPool, MapRating, MapSide, Match, SteamAccount, Team, TeamDashboardData, TeamEvent, TeamEventType, TeamInvite, TeamMember, TeamOffDay, TeamStats } from '../../src/types';
 
 type Role = 'Captain' | 'Officer' | 'Player';
 
@@ -16,6 +16,16 @@ export interface MockTeam {
     offDays: TeamOffDay[];
     mapRatings: MapRating[];
 }
+
+/** Rating and scoreboard stats as the API returns them: null when not sent. */
+const savedStats = (p: Partial<Omit<LineupPlayer, 'role'>>) => ({
+    rating: p.rating ?? null,
+    kills: p.kills ?? null,
+    deaths: p.deaths ?? null,
+    assists: p.assists ?? null,
+    adr: p.adr ?? null,
+    headshotPercentage: p.headshotPercentage ?? null,
+});
 
 /** The maps the API's map pool lists, in its order. */
 export const MAP_POOL_MAPS = ['Ancient', 'Anubis', 'Dust2', 'Inferno', 'Mirage', 'Nuke', 'Overpass', 'Train', 'Vertigo'];
@@ -307,14 +317,14 @@ export class MockApi {
                     ? [played[0].ourScore!, played[0].opponentScore!]
                     : [played.filter(x => x.ourScore! > x.opponentScore!).length, played.filter(x => x.opponentScore! > x.ourScore!).length];
             const lineup: LineupEntry[] = body.lineup
-                ? (body.lineup as { userId: string; role?: string; played: boolean; rating?: number }[]).map(p => ({
+                ? (body.lineup as LineupPlayer[]).map(p => ({
                     userId: p.userId,
                     username: t.members.find(x => x.id === p.userId)?.username ?? target.lineup.find(x => x.userId === p.userId)?.username ?? p.userId,
                     role: p.role ?? null,
                     played: p.played,
-                    rating: p.rating ?? null,
+                    ...savedStats(p),
                 }))
-                : target.lineup.map(p => (status === 'Finished' ? p : { ...p, rating: null }));
+                : target.lineup.map(p => (status === 'Finished' ? p : { ...p, ...savedStats({}) }));
             Object.assign(target, {
                 opponentName: body.opponentName,
                 tournament: body.tournament,
@@ -337,7 +347,7 @@ export class MockApi {
             const t = this.findTeam(m[1]);
             const target = t?.matches.find(x => x.id === Number(m![2]));
             if (!t || !target) return { status: 404, json: { message: 'Match was not found.' } };
-            const players = (body?.players ?? []) as { userId: string; role?: string | null; played: boolean; rating?: number }[];
+            const players = (body?.players ?? []) as (Omit<LineupPlayer, 'role'> & { role?: string | null })[];
             if (players.some(p => !t.members.some(x => x.id === p.userId))) {
                 return { status: 400, json: { message: 'Every player in the lineup must be a member of the team.' } };
             }
@@ -347,7 +357,7 @@ export class MockApi {
                     username: t.members.find(x => x.id === p.userId)!.username,
                     role: p.role?.trim() || null,
                     played: p.played,
-                    rating: p.rating ?? null,
+                    ...savedStats(p),
                 }))
                 .sort((a, b) => Number(b.played) - Number(a.played));
             target.lineup = lineup;

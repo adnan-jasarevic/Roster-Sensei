@@ -4,6 +4,7 @@ import api from '../services/api';
 import { useAction } from '../hooks/use-action';
 import { MAP_POOL } from '../constants/maps';
 import { formatPlayerRating, parsePlayerRating, ratingsAreValid } from '../lib/player-ratings';
+import { statsOf } from '../lib/match-stats';
 import {
     MatchKind,
     MatchStatus,
@@ -66,8 +67,9 @@ const seriesScore = (match: Match) => {
 
 /**
  * The lineup to send with an edit of a finished match. The dialog only shows who played and their
- * ratings, so everything else is kept: roles, substitutes who stay unticked, and players who have
- * left the team since (they aren't listed, so they stay among the picks as they were).
+ * ratings, so everything else is kept: roles, the scoreboard stats from the Lineup dialog, substitutes
+ * who stay unticked, and players who have left the team since (they aren't listed, so they stay among
+ * the picks as they were).
  */
 function mergeLineup(match: Match, picks: PlayerPick[]): LineupPlayer[] {
     const existing = new Map(match.lineup.map(entry => [entry.userId, entry]));
@@ -79,6 +81,8 @@ function mergeLineup(match: Match, picks: PlayerPick[]): LineupPlayer[] {
             role: existing.get(p.userId)?.role ?? undefined,
             played: true,
             rating: rating.ok && rating.value !== null ? rating.value : undefined,
+            // Only a player who already played has stats to keep; a substitute moved in starts without.
+            ...(existing.get(p.userId)?.played ? statsOf(existing.get(p.userId)) : {}),
         };
     });
     const substitutes = match.lineup

@@ -1,4 +1,5 @@
 import { hasResult, type Match } from '../types';
+import { killDeathRatio } from './match-stats';
 
 /** Limits enforced by LineupPlayerDtoValidator. */
 export const MIN_PLAYER_RATING = 0.01;
@@ -39,20 +40,32 @@ export interface PlayerStatsFilters {
     period: PeriodFilter;
     /** A map name from the pool, or 'all'. */
     map: string;
-    /** Players with fewer rated matches than this are left out. */
+    /** Players who played fewer matches than this are left out. */
     minMatches: number;
 }
 
 export interface PlayerStatsRow {
     userId: string;
     username: string;
-    /** Rated matches in the filter. */
+    /** Finished matches in the filter that the player played (substitutes who didn't play don't count). */
     matches: number;
-    average: number;
-    best: number;
-    worst: number;
+    wins: number;
+    /** Wins out of matches played, 0 to 100. */
+    winRate: number;
+    /** Kills per death over the matches with both recorded. Null when none have. */
+    killDeath: number | null;
+    /** Average of the recorded ADRs, or null. */
+    adr: number | null;
+    /** Average of the recorded HS%, or null. */
+    headshotPercentage: number | null;
+    /** Rated matches in the filter. */
+    rated: number;
+    /** The rating columns are null for a player who played but was never rated. */
+    average: number | null;
+    best: number | null;
+    worst: number | null;
     /** Average of the player's last five rated matches (or fewer, if that's all there is). */
-    form: number;
+    form: number | null;
     /** Ratings oldest first, for the trend line. */
     history: number[];
 }
@@ -75,7 +88,7 @@ export function periodStart(period: PeriodFilter, now: Date): Date | null {
 const matchDate = (match: Match) => new Date(match.playedDate ?? match.scheduledDate);
 
 /** Finished matches the filters keep, oldest first. */
-export function filterRatedMatches(matches: Match[], filters: Omit<PlayerStatsFilters, 'minMatches'>, now: Date): Match[] {
+export function filterFinishedMatches(matches: Match[], filters: Omit<PlayerStatsFilters, 'minMatches'>, now: Date): Match[] {
     const start = periodStart(filters.period, now);
     return matches
         .filter(m => hasResult(m))
@@ -85,38 +98,69 @@ export function filterRatedMatches(matches: Match[], filters: Omit<PlayerStatsFi
         .sort((a, b) => matchDate(a).getTime() - matchDate(b).getTime());
 }
 
-/** One row per player with at least one rating in the filtered matches. Not sorted. */
-export function playerStats(matches: Match[], filters: PlayerStatsFilters, now: Date): PlayerStatsRow[] {
-    const byPlayer = new Map<string, { username: string; ratings: number[] }>();
+/** True when the match has a result and at least one player who played. */
+export const hasPlayedLineup = (match: Match) => hasResult(match) && match.lineup.some(p => p.played);
 
-    for (const match of filterRatedMatches(matches, filters, now)) {
+const mean = (values: number[]) => (values.length === 0 ? null : values.reduce((sum, v) => sum + v, 0) / values.length);
+
+/** One row per player who played in the filtered matches. Not sorted. */
+export function playerStats(matches: Match[], filters: PlayerStatsFilters, now: Date): PlayerStatsRow[] {
+    interface Totals {
+        username: string;
+        matches: number;
+        wins: number;
+        kills: number;
+        deaths: number;
+        killDeathMatches: number;
+        adr: number[];
+        headshots: number[];
+        ratings: number[];
+    }
+    const byPlayer = new Map<string, Totals>();
+
+    for (const match of filterFinishedMatches(matches, filters, now)) {
         for (const entry of match.lineup ?? []) {
-            if (!entry.played || entry.rating == null) continue;
-            const player = byPlayer.get(entry.userId) ?? { username: entry.username, ratings: [] };
+            if (!entry.played) continue;
+            const player = byPlayer.get(entry.userId)
+                ?? { username: entry.username, matches: 0, wins: 0, kills: 0, deaths: 0, killDeathMatches: 0, adr: [], headshots: [], ratings: [] };
             // Matches are oldest first, so the name ends up as the most recent one.
             player.username = entry.username;
-            player.ratings.push(entry.rating);
+            player.matches++;
+            if (match.matchOutcome === 'Win') player.wins++;
+            if (entry.kills != null && entry.deaths != null) {
+                player.kills += entry.kills;
+                player.deaths += entry.deaths;
+                player.killDeathMatches++;
+            }
+            if (entry.adr != null) player.adr.push(entry.adr);
+            if (entry.headshotPercentage != null) player.headshots.push(entry.headshotPercentage);
+            if (entry.rating != null) player.ratings.push(entry.rating);
             byPlayer.set(entry.userId, player);
         }
     }
 
-    const mean = (values: number[]) => values.reduce((sum, v) => sum + v, 0) / values.length;
-
     return [...byPlayer.entries()]
-        .filter(([, p]) => p.ratings.length >= filters.minMatches)
+        .filter(([, p]) => p.matches >= filters.minMatches)
         .map(([userId, p]) => ({
             userId,
             username: p.username,
-            matches: p.ratings.length,
+            matches: p.matches,
+            wins: p.wins,
+            winRate: (p.wins / p.matches) * 100,
+            killDeath: p.killDeathMatches === 0 ? null : killDeathRatio(p.kills, p.deaths),
+            adr: mean(p.adr),
+            headshotPercentage: mean(p.headshots),
+            rated: p.ratings.length,
             average: mean(p.ratings),
-            best: Math.max(...p.ratings),
-            worst: Math.min(...p.ratings),
+            best: p.ratings.length === 0 ? null : Math.max(...p.ratings),
+            worst: p.ratings.length === 0 ? null : Math.min(...p.ratings),
             form: mean(p.ratings.slice(-FORM_MATCHES)),
             history: p.ratings,
         }));
 }
 
-export type PlayerStatsSortKey = 'username' | 'matches' | 'average' | 'best' | 'worst' | 'form';
+export type PlayerStatsSortKey =
+    | 'username' | 'matches' | 'winRate' | 'killDeath' | 'adr' | 'headshotPercentage' | 'average' | 'best' | 'worst' | 'form';
 
 export interface PlayerStatsSort {
     key: PlayerStatsSortKey;
@@ -128,11 +172,17 @@ export const DEFAULT_PLAYER_SORT: PlayerStatsSort = { key: 'average', desc: true
 export function sortPlayerStats(rows: PlayerStatsRow[], sort: PlayerStatsSort): PlayerStatsRow[] {
     const direction = sort.desc ? -1 : 1;
     return [...rows].sort((a, b) => {
-        const byKey = sort.key === 'username'
-            ? a.username.localeCompare(b.username)
-            : a[sort.key] - b[sort.key];
+        let byKey: number;
+        if (sort.key === 'username') {
+            byKey = a.username.localeCompare(b.username) * direction;
+        } else {
+            const x = a[sort.key];
+            const y = b[sort.key];
+            // A player without the value (never rated, no stats recorded) goes last either way.
+            byKey = x == null || y == null ? (x == null ? 1 : 0) - (y == null ? 1 : 0) : (x - y) * direction;
+        }
         // Ties fall back to the name, so the order never jumps around.
-        return byKey !== 0 ? byKey * direction : a.username.localeCompare(b.username);
+        return byKey !== 0 ? byKey : a.username.localeCompare(b.username);
     });
 }
 
