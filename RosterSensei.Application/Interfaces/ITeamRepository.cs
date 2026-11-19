@@ -23,8 +23,8 @@ public interface ITeamRepository
     // Rejected: the team already has a Captain. Conflict: ownership changed or the member left meanwhile.
     Task<WriteOutcome> ChangeMemberRoleAsync(int teamId, string ownerId, string memberId, TeamRole newRole);
 
-    // Makes an Officer the Owner, unless they already own maxOwnedTeams.
-    // Rejected: the limit is reached. Conflict: the Owner or the Officer's role changed meanwhile.
+    // Makes an Officer or a Coach the Owner, unless they already own maxOwnedTeams.
+    // Rejected: the limit is reached. Conflict: the Owner or the new Owner's role changed meanwhile.
     Task<WriteOutcome> TransferOwnershipAsync(int teamId, string currentOwnerId, string newOwnerId, int maxOwnedTeams);
 
     // Removes a member who doesn't own the team, when requesterId is the team's Owner or the member themselves.

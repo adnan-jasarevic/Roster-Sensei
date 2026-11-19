@@ -13,7 +13,7 @@ public class TeamOffDayService : ITeamOffDayService
     // Local midnight is at most 14 hours from UTC midnight (UTC-12 to UTC+14).
     private static readonly TimeSpan MaxUtcOffset = TimeSpan.FromHours(14);
 
-    private const string ManageForbiddenMessage = "Only the team Owner, Captain or Officers can change off days.";
+    private const string ManageForbiddenMessage = "Only the team Owner, Captain, Officers or Coaches can change off days.";
 
     private readonly ITeamOffDayRepository _offDayRepository;
     private readonly ITeamRepository _teamRepository;

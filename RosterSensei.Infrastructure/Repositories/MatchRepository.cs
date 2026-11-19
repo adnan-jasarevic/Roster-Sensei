@@ -1,6 +1,7 @@
 ﻿using RosterSensei.Application.DTOs;
 using RosterSensei.Application.Interfaces;
 using RosterSensei.Domain.Entities;
+using RosterSensei.Domain.Enums;
 using RosterSensei.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Data.Common;
@@ -81,16 +82,25 @@ public class MatchRepository : IMatchRepository
             if (requireFinished && await _context.Matches.Where(m => m.Id == matchId).Select(m => m.Status).SingleAsync() != MatchStatus.Finished)
                 return LineupWriteOutcome.MatchNotFinished;
 
+            // Players already in this lineup keep their place even if they left or became a Coach since.
+            // Anyone new must be a member of the team who isn't a Coach.
             var userIds = lineup.Select(p => p.UserId).Distinct().ToList();
-            var allowed = await _context.TeamMembers
-                .Where(tm => tm.TeamId == teamId && userIds.Contains(tm.UserId))
-                .Select(tm => tm.UserId)
-                .Union(_context.Set<MatchParticipation>()
-                    .Where(p => p.MatchId == matchId && userIds.Contains(p.UserId))
-                    .Select(p => p.UserId))
-                .CountAsync();
-            if (allowed != userIds.Count)
-                return LineupWriteOutcome.NotTeamMembers;
+            var existing = await _context.Set<MatchParticipation>()
+                .Where(p => p.MatchId == matchId && userIds.Contains(p.UserId))
+                .Select(p => p.UserId)
+                .ToListAsync();
+            var newcomers = userIds.Except(existing).ToList();
+            if (newcomers.Count > 0)
+            {
+                var roles = await _context.TeamMembers
+                    .Where(tm => tm.TeamId == teamId && newcomers.Contains(tm.UserId))
+                    .Select(tm => tm.Role)
+                    .ToListAsync();
+                if (roles.Count != newcomers.Count)
+                    return LineupWriteOutcome.NotTeamMembers;
+                if (roles.Any(r => !r.CanPlay()))
+                    return LineupWriteOutcome.CoachInLineup;
+            }
 
             await _context.Set<MatchParticipation>()
                 .Where(p => p.MatchId == matchId)

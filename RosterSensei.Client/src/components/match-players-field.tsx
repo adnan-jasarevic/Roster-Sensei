@@ -1,8 +1,8 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import api from '../services/api';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { parsePlayerRating } from '../lib/player-ratings';
-import { LINEUP_MAX_PLAYERS, type TeamMember } from '../types';
+import { LINEUP_MAX_PLAYERS, lineupCandidates, type TeamMember } from '../types';
 import { Checkbox, ErrorState, Field, Input, LoadingRegion, Skeleton } from './ui';
 
 /** A player ticked as having played, with the rating as typed (empty means not rated). */
@@ -30,6 +30,9 @@ export default function MatchPlayersField({ teamId, value, onChange, showErrors 
     );
     const { data: members, error, isLoading, isFetching, reload } = useResource(loadMembers, 'Failed to load the roster.');
 
+    // Coaches can't play, unless they were already in this match's lineup before becoming a Coach.
+    const [savedIds] = useState(() => new Set(value.map(p => p.userId)));
+
     const isFull = value.length >= LINEUP_MAX_PLAYERS;
     const pickFor = (userId: string) => value.find(p => p.userId === userId);
 
@@ -53,7 +56,7 @@ export default function MatchPlayersField({ teamId, value, onChange, showErrors 
                 <ErrorState compact title="Couldn't load the roster" message={error} onRetry={reload} retrying={isFetching} />
             ) : (
                 <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
-                    {(members ?? []).map(member => {
+                    {lineupCandidates(members ?? [], savedIds).map(member => {
                         const pick = pickFor(member.id);
                         const parsed = pick ? parsePlayerRating(pick.rating) : null;
                         const ratingError = showErrors && parsed && !parsed.ok ? parsed.message : undefined;

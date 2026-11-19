@@ -6,6 +6,7 @@ const cases = [
     { who: 'Owner (Player)', role: 'Player', isOwner: true, manage: true },
     { who: 'Captain', role: 'Captain', isOwner: false, manage: true },
     { who: 'Officer', role: 'Officer', isOwner: false, manage: true },
+    { who: 'Coach', role: 'Coach', isOwner: false, manage: true },
     { who: 'Player', role: 'Player', isOwner: false, manage: false },
 ] as const;
 
@@ -15,7 +16,7 @@ test.describe('what each role can do', () => {
             api.teams = [team(1, 'Tokyo Ronin', c.role, c.isOwner)];
             await api.install(page);
 
-            // Inviting, recording matches and the calendar: Owner, Captain and Officers.
+            // Inviting, recording matches and the calendar: Owner, Captain, Officers and Coaches.
             await page.goto('/team');
             await expect(page.getByRole('table', { name: 'Members of Tokyo Ronin' })).toBeVisible();
             await expect(page.getByRole('button', { name: 'Invite player' })).toHaveCount(c.manage ? 1 : 0);

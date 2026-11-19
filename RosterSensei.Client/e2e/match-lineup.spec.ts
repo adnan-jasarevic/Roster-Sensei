@@ -43,6 +43,34 @@ test.describe('Match lineup', () => {
         await expect(page.getByRole('button', { name: 'Edit lineup for the match vs Kyoto Kitsune' })).toBeVisible();
     });
 
+    test('Coaches are left out of a new lineup', async ({ page, api }) => {
+        const t = withMatch(api);
+        t.members.push(member('hiro', 'Coach'));
+        await api.install(page);
+        await page.goto('/matches');
+
+        await page.getByRole('button', { name: 'Set lineup for the match vs Kyoto Kitsune' }).click();
+        const dialog = page.getByRole('dialog', { name: 'Lineup vs Kyoto Kitsune' });
+        await expect(dialog.getByRole('checkbox', { name: 'kenji', exact: true })).toBeVisible();
+        await expect(dialog.getByRole('checkbox', { name: 'hiro', exact: true })).toHaveCount(0);
+    });
+
+    test('a Player who became a Coach keeps their place in a saved lineup', async ({ page, api }) => {
+        const t = withMatch(api);
+        t.members.push(member('hiro', 'Coach'));
+        t.matches[0].lineup = [{ userId: 'hiro', username: 'hiro', role: 'IGL', played: true, rating: null }];
+        await api.install(page);
+        await page.goto('/matches');
+
+        await page.getByRole('button', { name: 'Edit lineup for the match vs Kyoto Kitsune' }).click();
+        const dialog = page.getByRole('dialog', { name: 'Lineup vs Kyoto Kitsune' });
+        await expect(dialog.getByRole('checkbox', { name: 'hiro', exact: true })).toBeChecked();
+        await dialog.getByRole('button', { name: 'Save lineup' }).click();
+        await expect(dialog).toBeHidden();
+
+        expect(api.requestsTo('PUT', /lineup$/).at(-1)?.body).toEqual({ players: [{ userId: 'hiro', role: 'IGL', played: true }] });
+    });
+
     test('editing starts from the saved lineup, and unticking everyone clears it', async ({ page, api }) => {
         const t = withMatch(api);
         t.matches[0].lineup = [{ userId: 'kenji', username: 'kenji', role: 'AWP', played: true, rating: null }];
