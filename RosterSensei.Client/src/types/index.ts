@@ -10,10 +10,10 @@ export interface LoginResponse {
  * A member's role in a team, as the API names it. Matches TeamRole in RosterSensei.Domain.
  * The Owner isn't a role: ownership is the separate `isOwner` flag, and the Owner has a role too.
  */
-export type TeamRole = 'Captain' | 'Officer' | 'Player';
+export type TeamRole = 'Captain' | 'Officer' | 'Player' | 'Coach';
 
 /** Every role the Owner can give a member, in the order the role picker lists them. */
-export const TEAM_ROLES: readonly TeamRole[] = ['Player', 'Officer', 'Captain'];
+export const TEAM_ROLES: readonly TeamRole[] = ['Player', 'Officer', 'Captain', 'Coach'];
 
 export interface Team {
     id: number;
@@ -275,15 +275,20 @@ export interface TeamStats {
     form: FormPoint[];
 }
 
-// The Owner, the Captain and Officers can invite players and manage matches and the calendar.
+// Everyone but Players (and the Owner, whatever their role) can invite and manage matches and the calendar.
 export const canManageTeam = (team?: Team) =>
-    !!team && (team.isOwner || team.currentUserRole === 'Captain' || team.currentUserRole === 'Officer');
+    !!team && (team.isOwner || team.currentUserRole === 'Captain' || team.currentUserRole === 'Officer' || team.currentUserRole === 'Coach');
 
 // How the user's place in a team is shown, for example "Owner, Captain".
 export const roleLabel = (team: Team) => team.isOwner ? `Owner, ${team.currentUserRole}` : team.currentUserRole;
 
-// Ownership can only be handed to an Officer. The API enforces the same rule.
-export const canReceiveOwnership = (member: TeamMember) => !member.isOwner && member.role === 'Officer';
+// Ownership goes only to an Officer or a Coach, as in the API.
+export const canReceiveOwnership = (member: TeamMember) =>
+    !member.isOwner && (member.role === 'Officer' || member.role === 'Coach');
+
+// Members who can be picked for a lineup: everyone but Coaches, plus anyone already in it.
+export const lineupCandidates = (members: TeamMember[], alreadyInLineup: ReadonlySet<string>) =>
+    members.filter(member => member.role !== 'Coach' || alreadyInLineup.has(member.id));
 
 // The match was played, so its score and outcome mean something.
 export const hasResult = (match: Pick<Match, 'status'>) => match.status === 'Finished';

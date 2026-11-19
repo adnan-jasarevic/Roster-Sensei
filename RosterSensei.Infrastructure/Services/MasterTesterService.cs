@@ -1,4 +1,4 @@
-using RosterSensei.Application.Common;
+﻿using RosterSensei.Application.Common;
 using RosterSensei.Application.DTOs;
 using RosterSensei.Application.Interfaces;
 using RosterSensei.Application.Validators;
@@ -514,7 +514,7 @@ public class MasterTesterService : IMasterTesterService
         };
     }
 
-    // Members in lineup order (the Owner first), each with their usual in-game role.
+    // Members who can play, in lineup order (the Owner first), each with their usual in-game role.
     private async Task<List<(string UserId, string Role)>> LineupPoolAsync(int teamId)
     {
         var team = await _db.Teams.Include(t => t.Members).SingleAsync(t => t.Id == teamId);
@@ -522,6 +522,7 @@ public class MasterTesterService : IMasterTesterService
         var emails = await _userManager.Users.Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Email ?? "");
 
         return team.Members
+            .Where(m => m.Role.CanPlay())
             .OrderByDescending(m => m.UserId == team.OwnerId)
             .ThenBy(m => m.JoinedAt)
             .Select(m =>

@@ -44,7 +44,7 @@ public class TeamEventService : ITeamEventService
     public async Task<Result<TeamEventDto>> CreateEventAsync(string userId, int teamId, SaveTeamEventDto dto)
     {
         if (!await CanManageAsync(teamId, userId))
-            return Result<TeamEventDto>.Forbidden("Only the team Owner, Captain or Officers can add events.");
+            return Result<TeamEventDto>.Forbidden("Only the team Owner, Captain, Officers or Coaches can add events.");
 
         var problem = await CheckTypeAndDayAsync(teamId, dto, timesChanged: true);
         if (problem != null)
@@ -67,7 +67,7 @@ public class TeamEventService : ITeamEventService
     public async Task<Result<TeamEventDto>> UpdateEventAsync(string userId, int teamId, int eventId, SaveTeamEventDto dto)
     {
         if (!await CanManageAsync(teamId, userId))
-            return Result<TeamEventDto>.Forbidden("Only the team Owner, Captain or Officers can edit events.");
+            return Result<TeamEventDto>.Forbidden("Only the team Owner, Captain, Officers or Coaches can edit events.");
 
         if (dto.Version == null)
             return Result<TeamEventDto>.Failure("The event version is required when editing.");
@@ -102,7 +102,7 @@ public class TeamEventService : ITeamEventService
     public async Task<Result<string>> DeleteEventAsync(string userId, int teamId, int eventId)
     {
         if (!await CanManageAsync(teamId, userId))
-            return Result<string>.Forbidden("Only the team Owner, Captain or Officers can delete events.");
+            return Result<string>.Forbidden("Only the team Owner, Captain, Officers or Coaches can delete events.");
 
         // One conditional delete, so two people deleting the same event at once get a 404 instead of an error.
         if (!await _eventRepository.DeleteAsync(teamId, eventId))

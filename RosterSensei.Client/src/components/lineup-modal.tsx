@@ -7,6 +7,7 @@ import {
     hasResult,
     LINEUP_MAX_PLAYERS,
     LINEUP_MAX_ROLE_LENGTH,
+    lineupCandidates,
     type LineupEntry,
     type Match,
     type SetLineupRequest,
@@ -61,6 +62,9 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
     const isSaving = save.isRunning;
 
     const memberIds = new Set(members?.map(m => m.id));
+    // Coaches are hidden unless they were already in this lineup.
+    const [savedIds] = useState(() => new Set((match.lineup ?? []).map(entry => entry.userId)));
+    const candidates = members ? lineupCandidates(members, savedIds) : [];
     // Players in the saved lineup who have since left the team. The API only accepts current
     // members, so they are dropped when saving.
     const formerPlayers = members ? (match.lineup ?? []).filter(entry => !memberIds.has(entry.userId)) : [];
@@ -150,7 +154,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
                     </p>
 
                     <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
-                        {(members ?? []).map(member => {
+                        {candidates.map(member => {
                             const pick = pickFor(member.id);
                             return (
                                 <li key={member.id} className="flex flex-col gap-2 p-2 sm:flex-row sm:items-center">

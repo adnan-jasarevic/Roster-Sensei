@@ -10,7 +10,7 @@ public class TeamEventTypeService : ITeamEventTypeService
     // Plenty for a calendar legend, and keeps the event form's type picker usable.
     private const int MaxTypesPerTeam = 30;
 
-    private const string ManageForbiddenMessage = "Only the team Owner, Captain or Officers can manage event types.";
+    private const string ManageForbiddenMessage = "Only the team Owner, Captain, Officers or Coaches can manage event types.";
     private const string OtherLockedMessage = "\"Other\" can't be changed or removed. It's where events go when their type is removed.";
 
     private readonly ITeamEventTypeRepository _typeRepository;

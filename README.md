@@ -8,13 +8,13 @@ A web app for amateur Counter-Strike 2 teams to manage their roster, schedule ma
 
 - **Accounts:** register and log in with email and password (JWT authentication).
 - **Teams:** create up to 3 teams you own and switch between all the teams you're in.
-- **Roles:** every member is a Captain, Officer or Player. A team has one Captain and any number of Officers, who have the same rights as the Captain: they invite players, record matches and manage the calendar.
-- **Ownership:** each team has one Owner, who also has a role. Whoever creates a team is its Owner and Captain. Only the Owner manages roles, removes players, transfers ownership (only to an Officer) and deletes the team.
+- **Roles:** every member is a Captain, Officer, Player or Coach. A team has one Captain and any number of Officers and Coaches, who have the same rights as the Captain: they invite players, record matches and manage the calendar. Coaches don't play, so they can't be put in a lineup and have no player statistics.
+- **Ownership:** each team has one Owner, who also has a role. Whoever creates a team is its Owner and Captain. Only the Owner manages roles, removes players, transfers ownership (only to an Officer or a Coach) and deletes the team.
 - **Leaving:** any member except the Owner can leave a team. The Owner transfers ownership or deletes the team first.
 - **Invites:** invite registered users by email. They accept or decline from the notification bell.
 - **Dashboard:** win rate, member count, recent results and upcoming matches for the selected team.
 - **Matches:** schedule or record matches with opponent, tournament, format (Bo1/Bo2/Bo3/Bo5), maps in play order, score and notes. Filter by upcoming, needs result or results. Any match can be edited later: a scheduled match whose time has passed shows "Needs result" with an **Add result** button, and results can be corrected or a match cancelled. If someone else saved the match after you opened it, your save is refused instead of overwriting theirs.
-- **Lineups:** the Owner, Captain and Officers record who played each match from the Lineup dialog on the Matches page, with an optional free-text role and whether they played or sat on the bench. The match list shows each lineup.
+- **Lineups:** the Owner, Captain, Officers and Coaches record who played each match from the Lineup dialog on the Matches page, with an optional free-text role and whether they played or sat on the bench. The match list shows each lineup.
 - **Player ratings:** when adding a finished match, tick who played and optionally give each a rating from 0.01 to 99.99 (a comma works as the decimal point). Ratings can be added or corrected later in a match's lineup, only for players who played in a finished match.
 - **Player statistics:** a section of the Statistics tab with each player's rated matches, average, form (last 5 rated matches), best and worst rating. Filters: match type (the tab's switch), period, map and a minimum number of rated matches. Columns sort.
 - **Calendar:** plan praccs, official matches, VOD reviews and more in month, week, day and agenda views.

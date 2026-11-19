@@ -122,7 +122,7 @@ public class TeamRepository : ITeamRepository
 
     public async Task<WriteOutcome> TransferOwnershipAsync(int teamId, string currentOwnerId, string newOwnerId, int maxOwnedTeams)
     {
-        // Serializable for the same reason as AddOwnedTeamAsync: two teams handed to the same Officer at once
+        // Serializable for the same reason as AddOwnedTeamAsync: two teams handed to the same member at once
         // can't both pass the limit.
         await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
@@ -130,11 +130,11 @@ public class TeamRepository : ITeamRepository
             if (await _context.Teams.CountAsync(t => t.OwnerId == newOwnerId) >= maxOwnedTeams)
                 return WriteOutcome.Rejected;
 
-            // Only applies while the requester still owns the team and the new Owner is still an Officer in it.
+            // Only applies while the requester still owns the team and the new Owner still has a role that can own it.
             var updated = await _context.Teams
                 .Where(t => t.Id == teamId
                     && t.OwnerId == currentOwnerId
-                    && t.Members.Any(m => m.UserId == newOwnerId && m.Role == TeamRole.Officer))
+                    && t.Members.Any(m => m.UserId == newOwnerId && (m.Role == TeamRole.Officer || m.Role == TeamRole.Coach)))
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.OwnerId, newOwnerId));
 
             if (updated != 1)

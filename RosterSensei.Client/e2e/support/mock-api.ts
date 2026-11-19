@@ -1,7 +1,7 @@
 import type { Page, Request, Route } from '@playwright/test';
 import type { LineupEntry, MapPool, MapRating, MapSide, Match, SteamAccount, Team, TeamDashboardData, TeamEvent, TeamEventType, TeamInvite, TeamMember, TeamOffDay, TeamStats } from '../../src/types';
 
-type Role = 'Captain' | 'Officer' | 'Player';
+type Role = 'Captain' | 'Officer' | 'Player' | 'Coach';
 
 export interface MockTeam {
     id: number;

@@ -70,7 +70,7 @@ public class TeamRoleTests : IDisposable
     [Fact]
     public async Task Unknown_role_is_rejected()
     {
-        var result = await _db.TeamService().ChangeMemberRoleAsync(_teamId, _owner, _player, "Coach");
+        var result = await _db.TeamService().ChangeMemberRoleAsync(_teamId, _owner, _player, "Manager");
 
         Assert.False(result.Success);
         Assert.Equal(TeamRole.Player, _db.RoleOf(_teamId, _player));
