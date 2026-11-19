@@ -61,5 +61,41 @@ public class LineupPlayerDtoValidator : AbstractValidator<LineupPlayerDto>
             .Null()
             .When(p => !p.Played)
             .WithMessage("Only a player who played can be rated.");
+
+        RuleFor(p => p.Kills)
+            .InclusiveBetween(0, PlayerMatchStats.MaxCount)
+            .WithMessage($"Kills must be between 0 and {PlayerMatchStats.MaxCount}.");
+
+        RuleFor(p => p.Deaths)
+            .InclusiveBetween(0, PlayerMatchStats.MaxCount)
+            .WithMessage($"Deaths must be between 0 and {PlayerMatchStats.MaxCount}.");
+
+        RuleFor(p => p.Assists)
+            .InclusiveBetween(0, PlayerMatchStats.MaxCount)
+            .WithMessage($"Assists must be between 0 and {PlayerMatchStats.MaxCount}.");
+
+        RuleFor(p => p.Adr)
+            .InclusiveBetween(0m, PlayerMatchStats.MaxAdr)
+            .WithMessage($"ADR must be between 0 and {PlayerMatchStats.MaxAdr}.");
+
+        RuleFor(p => p.Adr)
+            .Must(v => decimal.Round(v!.Value, 1) == v.Value)
+            .When(p => p.Adr.HasValue)
+            .WithMessage("ADR can have at most one decimal.");
+
+        RuleFor(p => p.HeadshotPercentage)
+            .InclusiveBetween(0m, PlayerMatchStats.MaxHeadshotPercentage)
+            .WithMessage("HS% must be between 0 and 100.");
+
+        RuleFor(p => p.HeadshotPercentage)
+            .Must(v => decimal.Round(v!.Value, 1) == v.Value)
+            .When(p => p.HeadshotPercentage.HasValue)
+            .WithMessage("HS% can have at most one decimal.");
+
+        RuleFor(p => p)
+            .Must(p => p.Kills == null && p.Deaths == null && p.Assists == null && p.Adr == null && p.HeadshotPercentage == null)
+            .When(p => !p.Played)
+            .OverridePropertyName("Stats")
+            .WithMessage("Only a player who played can have stats.");
     }
 }

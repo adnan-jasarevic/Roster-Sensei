@@ -237,7 +237,7 @@ public class MasterTesterService : IMasterTesterService
         if (replace)
         {
             var existing = await _db.Matches.Where(m => m.TeamId == teamId)
-                .Include(m => m.Maps).Include(m => m.Participations).Include(m => m.TeamStats)
+                .Include(m => m.Maps).Include(m => m.Participations)
                 .ToListAsync();
             _db.Matches.RemoveRange(existing);
             await _db.SaveChangesAsync();
@@ -439,15 +439,24 @@ public class MasterTesterService : IMasterTesterService
         };
 
         // Five who played, plus one on the bench when the roster has a sixth player. Players who played
-        // get an HLTV-style rating (around 1.00), a bit higher after a win; now and then one is left unrated.
+        // get an HLTV-style rating (around 1.00), a bit higher after a win, and a scoreboard line that
+        // roughly follows it; now and then one is left without stats.
         bool won = ourScore > theirScore;
+        int rounds = maps.Sum(m => m.OurScore!.Value + m.OpponentScore!.Value);
         foreach (var (player, index) in lineupPool.Take(6).Select((p, i) => (p, i)))
         {
-            bool played = index < 5;
-            decimal? rating = played && Chance(0.92)
-                ? Math.Clamp(Math.Round((decimal)(0.55 + _random.NextDouble() * 0.85 + (won ? 0.15 : 0)), 2), PlayerRating.Min, PlayerRating.Max)
-                : null;
-            match.Participations.Add(new MatchParticipation { UserId = player.UserId, Role = player.Role, Played = played, Rating = rating });
+            var participation = new MatchParticipation { UserId = player.UserId, Role = player.Role, Played = index < 5 };
+            if (participation.Played && Chance(0.92))
+            {
+                var form = 0.55 + _random.NextDouble() * 0.85 + (won ? 0.15 : 0);
+                participation.Rating = Math.Clamp(Math.Round((decimal)form, 2), PlayerRating.Min, PlayerRating.Max);
+                participation.Kills = Math.Clamp((int)Math.Round(rounds * 0.68 * form), 0, PlayerMatchStats.MaxCount);
+                participation.Deaths = Math.Clamp((int)Math.Round(rounds * (0.62 + _random.NextDouble() * 0.2 - (won ? 0.06 : 0))), 0, PlayerMatchStats.MaxCount);
+                participation.Assists = Math.Clamp((int)Math.Round(rounds * (0.1 + _random.NextDouble() * 0.15)), 0, PlayerMatchStats.MaxCount);
+                participation.Adr = Math.Clamp(Math.Round((decimal)(55 + form * 30 + _random.NextDouble() * 15), 1), 0m, PlayerMatchStats.MaxAdr);
+                participation.HeadshotPercentage = Math.Round((decimal)(35 + _random.NextDouble() * 30), 1);
+            }
+            match.Participations.Add(participation);
         }
 
         return match;
