@@ -62,7 +62,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
     const isSaving = save.isRunning;
 
     const memberIds = new Set(members?.map(m => m.id));
-    // Coaches can't play, unless they were already in this lineup before becoming a Coach.
+    // Coaches are hidden unless they were already in this lineup.
     const [savedIds] = useState(() => new Set((match.lineup ?? []).map(entry => entry.userId)));
     const candidates = members ? lineupCandidates(members, savedIds) : [];
     // Players in the saved lineup who have since left the team. The API only accepts current

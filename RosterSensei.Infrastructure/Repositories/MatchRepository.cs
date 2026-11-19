@@ -82,8 +82,7 @@ public class MatchRepository : IMatchRepository
             if (requireFinished && await _context.Matches.Where(m => m.Id == matchId).Select(m => m.Status).SingleAsync() != MatchStatus.Finished)
                 return LineupWriteOutcome.MatchNotFinished;
 
-            // Players already in this lineup keep their place even if they left or became a Coach since.
-            // Anyone new must be a member of the team who isn't a Coach.
+            // New players must be members who aren't Coaches; players already in it keep their place.
             var userIds = lineup.Select(p => p.UserId).Distinct().ToList();
             var existing = await _context.Set<MatchParticipation>()
                 .Where(p => p.MatchId == matchId && userIds.Contains(p.UserId))

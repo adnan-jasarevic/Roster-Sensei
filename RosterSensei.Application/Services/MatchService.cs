@@ -85,8 +85,8 @@ public class MatchService : IMatchService
         if (match.Version != dto.Version)
             return Result<MatchDto>.Conflict(EditConflictMessage);
 
-        // A sent lineup replaces the old one. Its players must be on the team and not Coaches, or already
-        // in this lineup: someone who has left or become a Coach since keeps their place in the match's history.
+        // A sent lineup replaces the old one. New players must be members who aren't Coaches;
+        // players already in it keep their place even if they left or became a Coach.
         List<MatchParticipation>? lineup = null;
         if (dto.Lineup != null)
         {

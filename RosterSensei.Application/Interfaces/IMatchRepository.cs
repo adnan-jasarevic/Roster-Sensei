@@ -11,7 +11,7 @@ public enum LineupWriteOutcome
     MatchNotFinished,
     // A player isn't a member of the team (and wasn't already in this lineup).
     NotTeamMembers,
-    // A Coach who wasn't already in this lineup was added to it.
+    // A Coach was added who wasn't already in this lineup.
     CoachInLineup,
     // The database gave up on the write, e.g. as a deadlock victim. Retrying may work.
     Conflict

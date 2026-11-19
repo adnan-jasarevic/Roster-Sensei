@@ -130,7 +130,7 @@ public class TeamRepository : ITeamRepository
             if (await _context.Teams.CountAsync(t => t.OwnerId == newOwnerId) >= maxOwnedTeams)
                 return WriteOutcome.Rejected;
 
-            // Only applies while the requester still owns the team and the new Owner is still an Officer or a Coach in it.
+            // Only applies while the requester still owns the team and the new Owner still has a role that can own it.
             var updated = await _context.Teams
                 .Where(t => t.Id == teamId
                     && t.OwnerId == currentOwnerId

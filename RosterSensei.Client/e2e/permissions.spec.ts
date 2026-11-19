@@ -16,7 +16,7 @@ test.describe('what each role can do', () => {
             api.teams = [team(1, 'Tokyo Ronin', c.role, c.isOwner)];
             await api.install(page);
 
-            // Inviting, recording matches and the calendar: Owner, Captain, Officers and Coaches.
+            // Inviting, recording matches and the calendar: everyone but Players.
             await page.goto('/team');
             await expect(page.getByRole('table', { name: 'Members of Tokyo Ronin' })).toBeVisible();
             await expect(page.getByRole('button', { name: 'Invite player' })).toHaveCount(c.manage ? 1 : 0);

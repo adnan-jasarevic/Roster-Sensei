@@ -514,7 +514,7 @@ public class MasterTesterService : IMasterTesterService
         };
     }
 
-    // Members who can play (not Coaches) in lineup order (the Owner first), each with their usual in-game role.
+    // Members who can play, in lineup order (the Owner first), each with their usual in-game role.
     private async Task<List<(string UserId, string Role)>> LineupPoolAsync(int teamId)
     {
         var team = await _db.Teams.Include(t => t.Members).SingleAsync(t => t.Id == teamId);

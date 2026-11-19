@@ -30,7 +30,7 @@ export default function MatchPlayersField({ teamId, value, onChange, showErrors 
     );
     const { data: members, error, isLoading, isFetching, reload } = useResource(loadMembers, 'Failed to load the roster.');
 
-    // Coaches can't play, unless they were already in this match's lineup before becoming a Coach.
+    // Coaches are hidden unless they were already in this lineup.
     const [savedIds] = useState(() => new Set(value.map(p => p.userId)));
 
     const isFull = value.length >= LINEUP_MAX_PLAYERS;

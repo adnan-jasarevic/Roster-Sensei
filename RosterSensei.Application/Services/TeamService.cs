@@ -306,7 +306,7 @@ public class TeamService : ITeamService
         if (!newOwner.Role.CanReceiveOwnership())
             return Result<string>.Failure("Ownership can only be transferred to an Officer or a Coach. Make them an Officer or a Coach first.");
 
-        // Only ownership moves: both keep their roles, so the old Owner stays on with the role they had.
+        // Only ownership moves: both keep their roles.
         var outcome = await _teamRepository.TransferOwnershipAsync(teamId, currentOwnerId, newOwnerId, MaxOwnedTeams);
         if (outcome == WriteOutcome.Rejected)
             return Result<string>.Failure($"This member already owns {MaxOwnedTeams} teams and cannot take ownership of another.");

@@ -6,7 +6,6 @@ using RosterSensei.Tests.Infrastructure;
 
 namespace RosterSensei.Tests;
 
-// Coaches run the team like the Captain and Officers, can be several, can receive ownership, but never play.
 public class CoachRoleTests : IDisposable
 {
     private static readonly DateTime Yesterday = DateTime.UtcNow.Date.AddDays(-1);
