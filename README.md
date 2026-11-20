@@ -23,7 +23,7 @@ A web app for amateur Counter-Strike 2 teams to manage their roster, schedule ma
   - **Event types:** each team picks its own. New teams start with Pracc, Official Match, VOD Review, Theory and Other; Scrim, Recorded Match, Break, Warmup and Meet can be added, as can custom types. Types can be renamed, recoloured and removed. Removing a type keeps its events and moves them to Other, which every team always has and which can't be changed.
   - **Recorded matches:** with the Recorded Match type on, matches from the Matches page show on the calendar, and one that starts during a Scrim or Official Match event takes that event's place.
   - **Off days:** a day marked off is grayed out and no events can be added to it. Events already on it show as cancelled and come back if the day is unmarked.
-- **Steam:** link your Steam account on the Account page by SteamID64, profile URL, or STEAM_0/[U:1] ID. The Team roster links to each member's Steam profile. One Steam account can be linked to one user.
+- **Steam:** link your Steam account on the Account page by signing in through Steam (OpenID), which proves the account is yours; Roster Sensei never sees the Steam password. The Team roster shows each member's Steam name and avatar and links to their profile. One Steam account can be linked to one user. Links pasted before Steam sign-in existed show as Unverified until the user signs in through Steam.
 
 ## Tech stack
 
@@ -72,7 +72,9 @@ To use a database other than LocalDB, override the connection string the same wa
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<your connection string>" --project RosterSensei.Api
 ```
 
-The API only accepts browser requests from origins listed under `Cors:AllowedOrigins`. In Development that's `http://localhost:5173`, the Vite dev server (see `appsettings.Development.json`).
+The API only accepts browser requests from origins listed under `Cors:AllowedOrigins`. In Development that's `http://localhost:5173`, the Vite dev server (see `appsettings.Development.json`). Steam sign-in only returns users to these origins too, so add your production frontend there.
+
+Steam names and avatars on the roster come from public Steam Community profiles, so no Steam Web API key is needed. Lookups are cached for an hour; if Steam is down or rate-limits the API, the roster just shows "Steam" instead of names and avatars until it recovers.
 
 ### 2. Create the database
 
@@ -121,7 +123,7 @@ The backend tests run the real services and repositories against an in-memory SQ
 dotnet test RosterSensei.Tests
 ```
 
-They cover team membership, invites, roles and permissions, ownership transfer, leaving and deleting teams, Steam account linking, and match lineups. The tests in `RosterSensei.Tests/Api` also start the whole API in memory and call it over HTTP, to check sign-up, login, JWT validation, request validation and the status codes errors map to.
+They cover team membership, invites, roles and permissions, ownership transfer, leaving and deleting teams, Steam sign-in and account linking, and match lineups. The tests in `RosterSensei.Tests/Api` also start the whole API in memory and call it over HTTP, to check sign-up, login, JWT validation, request validation and the status codes errors map to.
 
 The frontend has browser tests (Playwright and axe) that run the production build against a mocked API, so they need no backend either:
 
@@ -140,4 +142,3 @@ GitHub Actions runs on every pull request and on every push to `master`: it buil
 Planned features:
 
 - [Player stats per match](https://github.com/adnan-jasarevic/Roster-Sensei/issues/19): importing stats from demo files or a stats service instead of typing them in
-- [Link a Steam account](https://github.com/adnan-jasarevic/Roster-Sensei/issues/20)

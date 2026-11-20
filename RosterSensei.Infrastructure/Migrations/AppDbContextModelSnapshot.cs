@@ -619,6 +619,11 @@ namespace RosterSensei.Infrastructure.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(17)");
 
+                    b.Property<bool>("SteamVerified")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 

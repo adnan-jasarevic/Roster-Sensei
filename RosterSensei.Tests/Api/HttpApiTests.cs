@@ -198,20 +198,6 @@ public class HttpApiTests : IDisposable
     }
 
     [Fact]
-    public async Task A_conflict_result_returns_409_with_a_message()
-    {
-        var alice = await _api.SignedInClientAsync("alice");
-        var bob = await _api.SignedInClientAsync("bob");
-        var steam = new LinkSteamAccountDto { Steam = "76561197960287930" };
-        (await alice.PutAsJsonAsync("/api/Account/steam", steam)).EnsureSuccessStatusCode();
-
-        var response = await bob.PutAsJsonAsync("/api/Account/steam", steam);
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.False(string.IsNullOrWhiteSpace(await MessageOf(response)));
-    }
-
-    [Fact]
     public async Task Members_of_a_team_can_see_each_other()
     {
         var alice = await _api.SignedInClientAsync("alice");

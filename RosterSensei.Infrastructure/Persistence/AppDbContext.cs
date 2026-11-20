@@ -53,6 +53,8 @@ public class AppDbContext : IdentityDbContext<AppUser>
             user.HasIndex(u => u.SteamId)
                 .IsUnique()
                 .HasFilter("[SteamId] IS NOT NULL");
+
+            user.Property(u => u.SteamVerified).HasDefaultValue(false);
         });
 
         builder.Entity<TeamMember>()

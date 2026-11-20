@@ -1,4 +1,4 @@
-import type { ComponentPropsWithRef, ReactNode } from 'react';
+import { useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { cx } from '../../lib/cx';
 
 export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
@@ -55,7 +55,28 @@ export function CardHeader({ title, description, action, className }: CardHeader
     );
 }
 
-export function Avatar({ name, className }: { name: string; className?: string }) {
+export interface AvatarProps {
+    name: string;
+    /** A picture, e.g. a Steam avatar. Falls back to the initial when it is missing or fails to load. */
+    imageUrl?: string | null;
+    className?: string;
+}
+
+export function Avatar({ name, imageUrl, className }: AvatarProps) {
+    const [failedUrl, setFailedUrl] = useState<string | null>(null);
+    if (imageUrl && failedUrl !== imageUrl) {
+        return (
+            <img
+                src={imageUrl}
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                onError={() => setFailedUrl(imageUrl)}
+                className={cx('size-10 shrink-0 rounded-full bg-accent-soft object-cover', className)}
+            />
+        );
+    }
     return (
         <span aria-hidden="true" className={cx('flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft font-display font-bold text-accent-text', className)}>
             {name.trim().charAt(0).toUpperCase() || '?'}

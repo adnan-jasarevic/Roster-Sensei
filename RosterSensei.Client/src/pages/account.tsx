@@ -1,17 +1,25 @@
-import { useState, type FormEvent } from 'react';
-import { ExternalLink, Gamepad2, Link2, Unlink } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ExternalLink, Gamepad2, LogIn, ShieldAlert, ShieldCheck, Unlink } from 'lucide-react';
 import api from '../services/api';
 import { useAction } from '../hooks/use-action';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
-import { type SteamAccount } from '../types';
+import { type SteamAccount, type SteamSignInStarted } from '../types';
 import PageHeader, { PageContainer } from '../components/page-header';
-import { Alert, Button, Card, CardHeader, ConfirmDialog, ErrorState, Field, Input, LoadingRegion, Skeleton, useToast } from '../components/ui';
-
-// Same wording as SteamId.FormatHint in the API.
-const FORMAT_HINT = 'Your SteamID64 (17 digits), your steamcommunity.com/profiles/ URL, or a STEAM_0:X:Y or [U:1:N] ID.';
+import { Alert, Avatar, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorState, LoadingRegion, Skeleton, useToast } from '../components/ui';
 
 const loadSteamAccount: ResourceLoader<SteamAccount> = signal =>
     api.get<SteamAccount>('/Account/steam', { signal }).then(response => response.data);
+
+/** The openid.* fields Steam added to the URL when it sent the user back, or null when it didn't. */
+function readSteamReply(params: URLSearchParams): Record<string, string> | null {
+    if (!params.has('openid.mode')) return null;
+    const reply: Record<string, string> = {};
+    params.forEach((value, key) => {
+        if (key.startsWith('openid.')) reply[key] = value;
+    });
+    return reply;
+}
 
 export default function Account() {
     return (
@@ -24,73 +32,71 @@ export default function Account() {
 
 function SteamAccountCard() {
     const toast = useToast();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { data, error, isLoading, isFetching, reload } = useResource(loadSteamAccount, 'Failed to load your Steam account.');
 
-    // The result of the last link or unlink. It wins over the loaded data, so a GET that was still
+    // The result of the last sign-in or unlink. It wins over the loaded data, so a GET that was still
     // in flight when the change was saved can't put the old state back on screen.
     const [saved, setSaved] = useState<SteamAccount | null>(null);
     const account = saved ?? data;
     const isLinked = !!account?.steamId;
 
-    // The change form and the unlink confirmation are independent: the confirmation opens over the
-    // form, and cancelling it leaves the form as it was. So these stay two flags, not one state.
-    const [isEditing, setIsEditing] = useState(false);
     const [isUnlinkOpen, setIsUnlinkOpen] = useState(false);
-
-    const [input, setInput] = useState('');
-    // A problem with what was typed, shown on the field. Any other failure is `link.error`.
-    const [fieldError, setFieldError] = useState('');
-    const link = useAction();
+    const signIn = useAction();
+    const complete = useAction();
     const unlink = useAction();
 
-    const showForm = !isLinked || isEditing;
+    // Coming back from Steam: finish the sign-in once. The ref survives StrictMode's second effect run,
+    // and the reply is single-use on the server, so sending it twice would only show a false error.
+    const handledReply = useRef(false);
+    useEffect(() => {
+        const reply = readSteamReply(searchParams);
+        if (!reply || handledReply.current) return;
+        handledReply.current = true;
+        // Clean the address bar right away, so a reload or a shared link doesn't resend the reply.
+        navigate('/account', { replace: true });
 
-    const startEditing = () => {
-        setInput('');
-        setFieldError('');
-        link.reset();
-        setIsEditing(true);
-    };
+        void complete
+            .run(() => api.post<SteamAccount>('/Account/steam/sign-in/complete', { parameters: reply }), 'Failed to link your Steam account.')
+            .then(result => {
+                if (!result.ok) return;
+                setSaved(result.data.data);
+                toast.success('Steam account linked.');
+            });
+        // Runs for the URL Steam returned to; the other values are stable.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
 
-    const handleLink = async (event: FormEvent) => {
-        event.preventDefault();
-        const value = input.trim();
-        if (!value) return;
-
-        setFieldError('');
-        const result = await link.run(() => api.put<SteamAccount>('/Account/steam', { steam: value }), 'Failed to link your Steam account.');
-        if (result.ok) {
-            setSaved(result.data.data);
-            setIsEditing(false);
-            setInput('');
-            toast.success('Steam account linked.');
-            return;
-        }
-        // A 400 is about what was typed, so it goes on the field. A 409 means another user has it.
-        if (result.httpStatus === 400) {
-            setFieldError(result.message);
-            link.reset();
-        }
+    const handleSignIn = async () => {
+        const returnUrl = `${window.location.origin}/account`;
+        const result = await signIn.run(
+            () => api.post<SteamSignInStarted>('/Account/steam/sign-in', { returnUrl }),
+            'Failed to start Steam sign-in.',
+        );
+        // Leaves the app for steamcommunity.com; Steam sends the user back to returnUrl.
+        if (result.ok) window.location.assign(result.data.data.redirectUrl);
     };
 
     const handleUnlink = async () => {
         const result = await unlink.run(() => api.delete('/Account/steam'), 'Failed to unlink your Steam account.');
         if (!result.ok) return;
-        setSaved({ steamId: null, profileUrl: null });
+        setSaved({ steamId: null, profileUrl: null, verified: false });
         setIsUnlinkOpen(false);
-        setIsEditing(false);
         toast.success('Steam account unlinked.');
     };
+
+    const signInLabel = !isLinked ? 'Sign in through Steam' : account?.verified ? 'Use another Steam account' : 'Verify with Steam';
 
     return (
         <Card>
             <CardHeader
                 title="Steam account"
-                description="Link your Steam account so your team can open your Steam profile from the roster."
+                description="Sign in through Steam so your team sees your Steam name and profile on the roster. Roster Sensei never sees your Steam password."
             />
             <div className="border-t border-line px-5 py-4">
-                {isLoading ? (
-                    <LoadingRegion label="Loading your Steam account" className="space-y-2">
+                {isLoading || complete.isRunning ? (
+                    <LoadingRegion label={complete.isRunning ? 'Finishing Steam sign-in' : 'Loading your Steam account'} className="space-y-2">
                         <Skeleton className="h-4 w-1/3" />
                         <Skeleton className="h-11 w-full" />
                     </LoadingRegion>
@@ -98,14 +104,28 @@ function SteamAccountCard() {
                     <ErrorState compact title="Couldn't load your Steam account" message={error} onRetry={reload} retrying={isFetching} />
                 ) : (
                     <div className="flex flex-col gap-4">
-                        {isLinked && account && (
+                        {complete.error && <Alert tone="danger">{complete.error}</Alert>}
+                        {signIn.error && <Alert tone="danger">{signIn.error}</Alert>}
+
+                        {isLinked && account ? (
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="flex min-w-0 items-center gap-3">
-                                    <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-text">
-                                        <Gamepad2 className="size-5" />
-                                    </span>
+                                    {account.avatarUrl ? (
+                                        <Avatar name={account.personaName ?? 'Steam'} imageUrl={account.avatarUrl} />
+                                    ) : (
+                                        <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-text">
+                                            <Gamepad2 className="size-5" />
+                                        </span>
+                                    )}
                                     <div className="min-w-0">
-                                        <p className="font-semibold text-fg">Linked</p>
+                                        <p className="flex min-w-0 flex-wrap items-center gap-2">
+                                            <span className="truncate font-semibold text-fg">{account.personaName || 'Linked'}</span>
+                                            {account.verified ? (
+                                                <Badge tone="success" icon={<ShieldCheck />}>Verified</Badge>
+                                            ) : (
+                                                <Badge tone="warning" icon={<ShieldAlert />}>Unverified</Badge>
+                                            )}
+                                        </p>
                                         <p className="truncate text-sm text-fg-subtle tabular-nums">SteamID64 <span className="text-fg-muted">{account.steamId}</span></p>
                                     </div>
                                 </div>
@@ -122,9 +142,6 @@ function SteamAccountCard() {
                                             <span className="sr-only">(opens in a new tab)</span>
                                         </a>
                                     )}
-                                    {!isEditing && (
-                                        <Button size="sm" variant="secondary" onClick={startEditing}>Change</Button>
-                                    )}
                                     <Button
                                         size="sm"
                                         variant="ghost"
@@ -135,32 +152,26 @@ function SteamAccountCard() {
                                     </Button>
                                 </div>
                             </div>
+                        ) : null}
+
+                        {isLinked && account && !account.verified && (
+                            <Alert tone="warning">
+                                This Steam account was added by pasting its ID, so it isn't proven to be yours. Sign in through Steam to verify it.
+                            </Alert>
                         )}
 
-                        {showForm && (
-                            <form onSubmit={handleLink} className="flex flex-col gap-3" aria-label={isLinked ? 'Change Steam account' : 'Link Steam account'}>
-                                {link.error && <Alert tone="danger">{link.error}</Alert>}
-                                <Field label={isLinked ? 'New Steam profile or ID' : 'Steam profile or ID'} hint={FORMAT_HINT} error={fieldError || undefined}>
-                                    <Input
-                                        value={input}
-                                        onChange={e => { setInput(e.target.value); setFieldError(''); }}
-                                        placeholder="https://steamcommunity.com/profiles/7656119..."
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        maxLength={200}
-                                        autoFocus={isEditing}
-                                    />
-                                </Field>
-                                <div className="flex flex-wrap gap-2">
-                                    <Button type="submit" disabled={!input.trim()} loading={link.isRunning} loadingText="Linking..." leftIcon={<Link2 className="size-4" aria-hidden="true" />}>
-                                        {isLinked ? 'Save Steam account' : 'Link Steam account'}
-                                    </Button>
-                                    {isEditing && (
-                                        <Button variant="ghost" onClick={() => setIsEditing(false)} disabled={link.isRunning}>Cancel</Button>
-                                    )}
-                                </div>
-                            </form>
-                        )}
+                        <div>
+                            <Button
+                                variant={isLinked && account?.verified ? 'secondary' : 'primary'}
+                                size={isLinked && account?.verified ? 'sm' : undefined}
+                                onClick={handleSignIn}
+                                loading={signIn.isRunning}
+                                loadingText="Opening Steam..."
+                                leftIcon={<LogIn className="size-4" aria-hidden="true" />}
+                            >
+                                {signInLabel}
+                            </Button>
+                        </div>
                     </div>
                 )}
             </div>
@@ -175,7 +186,7 @@ function SteamAccountCard() {
                 busy={unlink.isRunning}
                 error={unlink.error}
             >
-                Your Steam profile will no longer show on your teams' rosters. You can link it again at any time.
+                Your Steam profile will no longer show on your teams' rosters. You can sign in through Steam again at any time.
             </ConfirmDialog>
         </Card>
     );

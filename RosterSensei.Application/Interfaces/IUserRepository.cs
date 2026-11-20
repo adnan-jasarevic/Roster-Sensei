@@ -1,16 +1,20 @@
 namespace RosterSensei.Application.Interfaces;
 
+// The user's linked Steam account. SteamId is null when none is linked.
+public sealed record SteamLink(string? SteamId, bool Verified);
+
 public interface IUserRepository
 {
     Task<bool> UserExistsAsync(string userId, CancellationToken cancellationToken = default);
 
-    // Null when the user has no Steam account linked (or doesn't exist).
-    Task<string?> GetSteamIdAsync(string userId, CancellationToken cancellationToken = default);
+    // Null when the user doesn't exist.
+    Task<SteamLink?> GetSteamLinkAsync(string userId, CancellationToken cancellationToken = default);
 
-    // The ID of the user who has this Steam account linked, or null.
-    Task<string?> GetUserIdBySteamIdAsync(string steamId, CancellationToken cancellationToken = default);
+    // Links a Steam account the user proved they own by signing in through Steam. An unverified (pasted)
+    // link of the same account on another user is removed, since that user never proved it was theirs.
+    // Conflict when another user has it verified; the unique index also catches two links racing.
+    Task<WriteOutcome> LinkVerifiedSteamIdAsync(string userId, string steamId);
 
-    // Sets or clears (null) the user's Steam ID. Conflict when another user linked the same account first,
-    // which the unique index catches even when both requests pass the check at the same time.
-    Task<WriteOutcome> SetSteamIdAsync(string userId, string? steamId);
+    // Rejected when the user doesn't exist.
+    Task<WriteOutcome> ClearSteamIdAsync(string userId);
 }
