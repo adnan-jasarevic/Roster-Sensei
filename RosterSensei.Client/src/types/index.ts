@@ -116,7 +116,7 @@ export interface SteamAccount {
     profileUrl: string | null;
     /** True when linked by signing in through Steam; false for links pasted before sign-in existed. */
     verified: boolean;
-    /** Public Steam name and avatar, when the server has a Steam Web API key. */
+    /** Public Steam name and avatar, when Steam answered the server's lookup. */
     personaName?: string | null;
     avatarUrl?: string | null;
 }
@@ -157,7 +157,7 @@ export interface TeamMember {
     steamProfileUrl?: string | null;
     /** True when the member proved the Steam account is theirs by signing in through Steam. */
     steamVerified?: boolean;
-    /** Public Steam name and avatar, when the server has a Steam Web API key. */
+    /** Public Steam name and avatar, when Steam answered the server's lookup. */
     steamPersonaName?: string | null;
     steamAvatarUrl?: string | null;
 }

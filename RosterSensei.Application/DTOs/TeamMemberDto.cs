@@ -16,7 +16,7 @@ public class TeamMemberDto
     // True when the member proved the Steam account is theirs by signing in through Steam.
     public bool SteamVerified { get; set; }
 
-    // Public Steam name and avatar, when the Steam Web API key is set and Steam answered. Otherwise null.
+    // Public Steam name and avatar, when Steam answered (it can be rate-limited or down). Otherwise null.
     public string? SteamPersonaName { get; set; }
     public string? SteamAvatarUrl { get; set; }
 }

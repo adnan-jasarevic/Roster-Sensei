@@ -243,7 +243,7 @@ public class TeamService : ITeamService
         var team = await _teamRepository.GetByIdAsync(teamId, cancellationToken);
         var membersData = await _teamRepository.GetTeamMembersWithUserDetailsAsync(teamId, cancellationToken);
 
-        // One batched, cached Steam lookup for the whole roster; empty when no API key is set or Steam is down.
+        // Cached Steam lookups for the whole roster; empty when Steam is down.
         var steamIds = membersData.Where(m => m.SteamId != null).Select(m => m.SteamId!).Distinct().ToList();
         var profiles = steamIds.Count == 0
             ? new Dictionary<string, SteamProfile>()

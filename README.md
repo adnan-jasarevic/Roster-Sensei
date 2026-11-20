@@ -74,13 +74,7 @@ dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<your connection 
 
 The API only accepts browser requests from origins listed under `Cors:AllowedOrigins`. In Development that's `http://localhost:5173`, the Vite dev server (see `appsettings.Development.json`). Steam sign-in only returns users to these origins too, so add your production frontend there.
 
-Steam names and avatars on the roster need a Steam Web API key (get one at https://steamcommunity.com/dev/apikey). Keep it out of the code:
-
-```bash
-dotnet user-secrets set "Steam:WebApiKey" "<your key>" --project RosterSensei.Api
-```
-
-In production, set the environment variable `Steam__WebApiKey` instead. Without a key, Steam sign-in still works and the roster just shows "Steam" instead of names and avatars.
+Steam names and avatars on the roster come from public Steam Community profiles, so no Steam Web API key is needed. Lookups are cached for an hour; if Steam is down or rate-limits the API, the roster just shows "Steam" instead of names and avatars until it recovers.
 
 ### 2. Create the database
 

@@ -9,7 +9,7 @@ public class SteamAccountDto
     // True when the link was made by signing in through Steam. Links pasted before Steam sign-in existed are false.
     public bool Verified { get; set; }
 
-    // Public Steam name and avatar, when the Steam Web API key is set and Steam answered. Otherwise null.
+    // Public Steam name and avatar, when Steam answered (it can be rate-limited or down). Otherwise null.
     public string? PersonaName { get; set; }
     public string? AvatarUrl { get; set; }
 }

@@ -1,7 +1,5 @@
 using System.Net;
-using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using RosterSensei.Infrastructure.Steam;
 using RosterSensei.Tests.Infrastructure;
 
@@ -113,55 +111,63 @@ public class SteamOpenIdVerifierTests
     }
 }
 
-public class SteamWebApiProfileProviderTests : IDisposable
+public class SteamCommunityProfileProviderTests : IDisposable
 {
     private const string Gabe = "76561197960287930";
     private const string Ghost = "76561198000000000";
+    private const string Avatar = "https://avatars.fastly.steamstatic.com/abc_medium.jpg";
 
     private readonly FakeTime _time = new();
-    private readonly SteamOptions _options = new() { WebApiKey = "test-key" };
     private readonly FakeHttpHandler _http;
-    private readonly SteamWebApiProfileProvider _provider;
+    private readonly SteamCommunityProfileProvider _provider;
     private Func<HttpRequestMessage, HttpResponseMessage> _respond;
 
-    public SteamWebApiProfileProviderTests()
+    public SteamCommunityProfileProviderTests()
     {
-        _respond = request => Summaries(request);
+        _respond = request => Profile(request);
         _http = new FakeHttpHandler((request, _) => _respond(request));
-        _provider = new SteamWebApiProfileProvider(
-            new FakeHttpClientFactory(_http), new StaticOptions(_options), NullLogger<SteamWebApiProfileProvider>.Instance, _time);
+        _provider = new SteamCommunityProfileProvider(
+            new FakeHttpClientFactory(_http), NullLogger<SteamCommunityProfileProvider>.Instance, _time);
     }
 
     public void Dispose() => _provider.Dispose();
 
-    // Steam knows Gabe and nobody else.
-    private static HttpResponseMessage Summaries(HttpRequestMessage request, string avatar = "https://avatars.steamstatic.com/abc_medium.jpg")
+    private static string IdOf(HttpRequestMessage request) => request.RequestUri!.AbsolutePath.Split('/')[2];
+
+    // What steamcommunity.com/profiles/<id>/?xml=1 answers: Steam knows Gabe and nobody else.
+    private static HttpResponseMessage Profile(HttpRequestMessage request, string avatar = Avatar, string name = "Rabscuttle")
     {
-        var ids = request.RequestUri!.Query.Split("steamids=")[1].Split(',');
-        var players = ids.Where(id => id == Gabe)
-            .Select(id => new { steamid = id, personaname = "gaben", avatarmedium = avatar });
-        return FakeHttpHandler.Text(JsonSerializer.Serialize(new { response = new { players } }));
+        var id = IdOf(request);
+        return FakeHttpHandler.Text(id == Gabe
+            ? $"""
+              <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+              <profile>
+                <steamID64>{id}</steamID64>
+                <steamID><![CDATA[{name}]]></steamID>
+                <onlineState>offline</onlineState>
+                <privacyState>public</privacyState>
+                <avatarIcon><![CDATA[https://avatars.fastly.steamstatic.com/abc.jpg]]></avatarIcon>
+                <avatarMedium><![CDATA[{avatar}]]></avatarMedium>
+                <avatarFull><![CDATA[https://avatars.fastly.steamstatic.com/abc_full.jpg]]></avatarFull>
+              </profile>
+              """
+            : """
+              <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+              <response><error><![CDATA[The specified profile could not be found.]]></error></response>
+              """);
     }
 
     [Fact]
-    public async Task Returns_names_and_avatars_from_one_request()
+    public async Task Reads_the_name_and_avatar_from_the_public_profile_without_a_key()
     {
         var profiles = await _provider.GetProfilesAsync([Gabe, Ghost]);
 
-        Assert.Equal("gaben", profiles[Gabe].PersonaName);
-        Assert.Equal("https://avatars.steamstatic.com/abc_medium.jpg", profiles[Gabe].AvatarUrl);
+        Assert.Equal("Rabscuttle", profiles[Gabe].PersonaName);
+        Assert.Equal(Avatar, profiles[Gabe].AvatarUrl);
         Assert.False(profiles.ContainsKey(Ghost));
-        var (request, _) = Assert.Single(_http.Requests);
-        Assert.StartsWith("https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=test-key&steamids=", request.RequestUri!.ToString());
-    }
-
-    [Fact]
-    public async Task Without_an_API_key_Steam_is_never_called()
-    {
-        _options.WebApiKey = "";
-
-        Assert.Empty(await _provider.GetProfilesAsync([Gabe]));
-        Assert.Empty(_http.Requests);
+        Assert.Equal(2, _http.Requests.Count);
+        Assert.Contains(_http.Requests, r => r.Request.RequestUri!.ToString() == $"https://steamcommunity.com/profiles/{Gabe}/?xml=1");
+        Assert.DoesNotContain(_http.Requests, r => r.Request.RequestUri!.Query.Contains("key="));
     }
 
     [Fact]
@@ -170,53 +176,111 @@ public class SteamWebApiProfileProviderTests : IDisposable
         await _provider.GetProfilesAsync([Gabe, Ghost]);
         var again = await _provider.GetProfilesAsync([Gabe, Ghost]);
 
-        Assert.Equal("gaben", again[Gabe].PersonaName);
+        Assert.Equal("Rabscuttle", again[Gabe].PersonaName);
+        Assert.Equal(2, _http.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Rosters_loading_at_the_same_time_share_one_lookup_per_account()
+    {
+        var gate = new TaskCompletionSource();
+        _respond = request => { gate.Task.Wait(); return Profile(request); };
+
+        var loads = Enumerable.Range(0, 5).Select(_ => _provider.GetProfilesAsync([Gabe])).ToList();
+        await Task.Delay(100);
+        gate.SetResult();
+        var results = await Task.WhenAll(loads);
+
+        Assert.All(results, r => Assert.Equal("Rabscuttle", r[Gabe].PersonaName));
         Assert.Single(_http.Requests);
+    }
+
+    [Fact]
+    public async Task Being_rate_limited_pauses_lookups_for_five_minutes()
+    {
+        _respond = _ => FakeHttpHandler.Text("", (HttpStatusCode)429);
+        Assert.Empty(await _provider.GetProfilesAsync([Gabe]));
+
+        _respond = request => Profile(request);
+        _time.Advance(SteamCommunityProfileProvider.PauseAfterFailure + TimeSpan.FromSeconds(1));
+        Assert.Empty(await _provider.GetProfilesAsync([Gabe]));
+        Assert.Single(_http.Requests);
+
+        _time.Advance(SteamCommunityProfileProvider.PauseAfterRateLimit);
+        Assert.Equal("Rabscuttle", (await _provider.GetProfilesAsync([Gabe]))[Gabe].PersonaName);
     }
 
     [Fact]
     public async Task After_a_failure_Steam_is_left_alone_for_a_minute()
     {
-        _respond = _ => FakeHttpHandler.Text("", HttpStatusCode.Forbidden);
+        _respond = _ => FakeHttpHandler.Text("", HttpStatusCode.ServiceUnavailable);
         Assert.Empty(await _provider.GetProfilesAsync([Gabe]));
 
-        _respond = request => Summaries(request);
+        _respond = request => Profile(request);
         Assert.Empty(await _provider.GetProfilesAsync([Gabe]));
         Assert.Single(_http.Requests);
 
-        _time.Advance(SteamWebApiProfileProvider.PauseAfterFailure + TimeSpan.FromSeconds(1));
-        Assert.Equal("gaben", (await _provider.GetProfilesAsync([Gabe]))[Gabe].PersonaName);
+        _time.Advance(SteamCommunityProfileProvider.PauseAfterFailure + TimeSpan.FromSeconds(1));
+        Assert.Equal("Rabscuttle", (await _provider.GetProfilesAsync([Gabe]))[Gabe].PersonaName);
     }
 
-    [Fact]
-    public async Task Garbage_from_Steam_is_a_failure_not_a_crash()
+    [Theory]
+    [InlineData("<html><body>Steam is down for maintenance</body></html>")]
+    [InlineData("not xml at all")]
+    [InlineData("<profile><steamID64>76561198000000001</steamID64><steamID>someone else</steamID></profile>")]
+    public async Task Garbage_or_someone_elses_profile_is_not_used(string body)
     {
-        _respond = _ => FakeHttpHandler.Text("<html>maintenance</html>");
+        _respond = _ => FakeHttpHandler.Text(body);
 
         Assert.Empty(await _provider.GetProfilesAsync([Gabe]));
     }
 
     [Fact]
-    public async Task A_cancelled_roster_request_does_not_pause_lookups()
+    public async Task XML_with_a_DTD_is_refused()
     {
-        using var cancelled = new CancellationTokenSource();
-        cancelled.Cancel();
-        _respond = _ => throw new TaskCanceledException();
+        _respond = _ => FakeHttpHandler.Text("""
+            <?xml version="1.0"?>
+            <!DOCTYPE profile [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+            <profile><steamID64>76561197960287930</steamID64><steamID>&xxe;</steamID></profile>
+            """);
 
-        Assert.Empty(await _provider.GetProfilesAsync([Gabe], cancelled.Token));
+        Assert.Empty(await _provider.GetProfilesAsync([Gabe]));
+    }
 
-        _respond = request => Summaries(request);
-        Assert.Equal("gaben", (await _provider.GetProfilesAsync([Gabe]))[Gabe].PersonaName);
+    [Fact]
+    public async Task Very_long_names_are_cut()
+    {
+        _respond = request => Profile(request, name: new string('x', 200));
+
+        Assert.Equal(64, (await _provider.GetProfilesAsync([Gabe]))[Gabe].PersonaName.Length);
+    }
+
+    [Fact]
+    public async Task A_cancelled_roster_request_still_fills_the_cache()
+    {
+        var gate = new TaskCompletionSource();
+        _respond = request => { gate.Task.Wait(); return Profile(request); };
+        using var cancel = new CancellationTokenSource();
+
+        var load = _provider.GetProfilesAsync([Gabe], cancel.Token);
+        await Task.Delay(50);
+        cancel.Cancel();
+        Assert.Empty(await load);
+
+        gate.SetResult();
+        await Task.Delay(100);
+        _respond = _ => throw new InvalidOperationException("should be cached");
+        Assert.Equal("Rabscuttle", (await _provider.GetProfilesAsync([Gabe]))[Gabe].PersonaName);
     }
 
     [Fact]
     public async Task Avatars_from_anywhere_but_Steam_are_dropped()
     {
-        _respond = request => Summaries(request, avatar: "https://evil.example/tracker.png");
+        _respond = request => Profile(request, avatar: "https://evil.example/tracker.png");
 
         var profiles = await _provider.GetProfilesAsync([Gabe]);
 
-        Assert.Equal("gaben", profiles[Gabe].PersonaName);
+        Assert.Equal("Rabscuttle", profiles[Gabe].PersonaName);
         Assert.Null(profiles[Gabe].AvatarUrl);
     }
 
@@ -229,23 +293,27 @@ public class SteamWebApiProfileProviderTests : IDisposable
     [InlineData("javascript:alert(1)", false)]
     public void Only_https_Steam_CDN_avatars_are_kept(string url, bool kept)
     {
-        Assert.Equal(kept, SteamWebApiProfileProvider.SafeAvatarUrl(url) != null);
+        Assert.Equal(kept, SteamCommunityProfileProvider.SafeAvatarUrl(url) != null);
     }
 
     [Fact]
-    public async Task Large_rosters_are_split_into_requests_of_100()
+    public async Task One_roster_load_looks_up_at_most_25_accounts_and_never_more_than_4_at_once()
     {
-        var ids = Enumerable.Range(1, 150).Select(i => (76561198000000000L + i).ToString()).ToList();
+        var running = 0;
+        var peak = 0;
+        _respond = request =>
+        {
+            var now = Interlocked.Increment(ref running);
+            lock (_http) peak = Math.Max(peak, now);
+            Thread.Sleep(20);
+            Interlocked.Decrement(ref running);
+            return Profile(request);
+        };
+        var ids = Enumerable.Range(1, 40).Select(i => (76561198000000000L + i).ToString()).ToList();
 
         await _provider.GetProfilesAsync(ids);
 
-        Assert.Equal(2, _http.Requests.Count);
-    }
-
-    private sealed class StaticOptions(SteamOptions value) : IOptionsMonitor<SteamOptions>
-    {
-        public SteamOptions CurrentValue => value;
-        public SteamOptions Get(string? name) => value;
-        public IDisposable? OnChange(Action<SteamOptions, string?> listener) => null;
+        Assert.Equal(SteamCommunityProfileProvider.MaxLookupsPerCall, _http.Requests.Count);
+        Assert.InRange(peak, 1, SteamCommunityProfileProvider.MaxConcurrentLookups);
     }
 }
