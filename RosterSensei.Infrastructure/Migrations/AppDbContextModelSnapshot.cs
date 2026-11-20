@@ -303,6 +303,23 @@ namespace RosterSensei.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("Adr")
+                        .HasPrecision(4, 1)
+                        .HasColumnType("decimal(4,1)");
+
+                    b.Property<int?>("Assists")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Deaths")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("HeadshotPercentage")
+                        .HasPrecision(4, 1)
+                        .HasColumnType("decimal(4,1)");
+
+                    b.Property<int?>("Kills")
+                        .HasColumnType("int");
+
                     b.Property<int>("MatchId")
                         .HasColumnType("int");
 
@@ -329,36 +346,6 @@ namespace RosterSensei.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("MatchParticipation");
-                });
-
-            modelBuilder.Entity("RosterSensei.Domain.Entities.MatchStat", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("MatchId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("StatType")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<double>("Value")
-                        .HasColumnType("float");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MatchId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("MatchStat");
                 });
 
             modelBuilder.Entity("RosterSensei.Domain.Entities.Team", b =>
@@ -761,21 +748,6 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.Navigation("Match");
                 });
 
-            modelBuilder.Entity("RosterSensei.Domain.Entities.MatchStat", b =>
-                {
-                    b.HasOne("RosterSensei.Domain.Entities.Match", "Match")
-                        .WithMany("TeamStats")
-                        .HasForeignKey("MatchId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("RosterSensei.Infrastructure.Identity.AppUser", null)
-                        .WithMany("MatchStats")
-                        .HasForeignKey("UserId");
-
-                    b.Navigation("Match");
-                });
-
             modelBuilder.Entity("RosterSensei.Domain.Entities.Team", b =>
                 {
                     b.HasOne("RosterSensei.Infrastructure.Identity.AppUser", null)
@@ -859,8 +831,6 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.Navigation("Maps");
 
                     b.Navigation("Participations");
-
-                    b.Navigation("TeamStats");
                 });
 
             modelBuilder.Entity("RosterSensei.Domain.Entities.Team", b =>
@@ -877,8 +847,6 @@ namespace RosterSensei.Infrastructure.Migrations
             modelBuilder.Entity("RosterSensei.Infrastructure.Identity.AppUser", b =>
                 {
                     b.Navigation("MatchParticipations");
-
-                    b.Navigation("MatchStats");
 
                     b.Navigation("TeamMemberships");
                 });

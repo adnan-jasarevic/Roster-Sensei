@@ -227,7 +227,7 @@ function RosterContent({ team }: { team: Team }) {
                                                 <MenuItem
                                                     icon={<ArrowRightLeft />}
                                                     disabled={!canReceiveOwnership(member)}
-                                                    hint={canReceiveOwnership(member) ? undefined : 'Make them an Officer first'}
+                                                    hint={canReceiveOwnership(member) ? undefined : 'Make them an Officer or a Coach first'}
                                                     onSelect={() => openDialog({ kind: 'transfer', member })}
                                                 >
                                                     Transfer ownership
@@ -253,7 +253,7 @@ function RosterContent({ team }: { team: Team }) {
                             <p className="font-semibold text-fg">Leave team</p>
                             <p className="text-sm break-words text-fg-subtle">
                                 {isOwner
-                                    ? 'You own this team. Transfer ownership to an Officer or delete the team before leaving.'
+                                    ? 'You own this team. Transfer ownership to an Officer or a Coach or delete the team before leaving.'
                                     : `You lose access to ${team.name}. You can only rejoin with a new invite.`}
                             </p>
                         </div>
@@ -377,7 +377,7 @@ function RosterContent({ team }: { team: Team }) {
                 >
                     <div className="flex flex-col gap-4">
                         {action.error && <Alert tone="danger">{action.error}</Alert>}
-                        <Field label="Role" hint="A team has one Captain and any number of Officers, who have the same rights as the Captain. The Owner keeps Owner rights whatever their role. Ownership can only be transferred to an Officer.">
+                        <Field label="Role" hint="A team has one Captain and any number of Officers and Coaches, who have the same rights as the Captain. Coaches don't play, so they can't be put in a lineup. The Owner keeps Owner rights whatever their role. Ownership can only be transferred to an Officer or a Coach.">
                             <Select
                                 value={dialog.newRole}
                                 onChange={newRole => setDialog({ ...dialog, newRole })}

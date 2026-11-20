@@ -40,7 +40,6 @@ public class Match
     public Team? Team { get; set; }
 
     public ICollection<MatchParticipation> Participations { get; set; } = new List<MatchParticipation>();
-    public ICollection<MatchStat> TeamStats { get; set; } = new List<MatchStat>();
 
     // Goes up by one on every edit. An edit sends the version it started from, so a save over
     // someone else's newer changes is refused instead of silently overwriting them.

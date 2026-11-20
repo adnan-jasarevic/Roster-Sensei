@@ -152,6 +152,7 @@ export default function UiKit() {
                     <RoleBadge role="Captain" />
                     <RoleBadge role="Officer" />
                     <RoleBadge role="Player" />
+                    <RoleBadge role="Coach" />
                     <Avatar name="sensei" />
                 </Row>
             </Section>

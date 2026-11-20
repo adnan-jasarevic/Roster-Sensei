@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace RosterSensei.Application.DTOs;
 
 // Body of PUT /api/Matches/{teamId}/{matchId}/lineup. Replaces the whole lineup; an empty list clears it.
@@ -15,6 +17,18 @@ public class LineupPlayerDto
     // 0.01 to 99.99 with at most two decimals, or null when not rated. Only for a player who played,
     // in a finished match.
     public decimal? Rating { get; set; }
+    // Totals for the whole match. Optional; same rules as the rating. K/D/A: 0 to 999.
+    public int? Kills { get; set; }
+    public int? Deaths { get; set; }
+    public int? Assists { get; set; }
+    // 0 to 999.9, one decimal.
+    public decimal? Adr { get; set; }
+    // 0 to 100, one decimal.
+    public decimal? HeadshotPercentage { get; set; }
+
+    [JsonIgnore]
+    public bool HasStats =>
+        Rating.HasValue || Kills.HasValue || Deaths.HasValue || Assists.HasValue || Adr.HasValue || HeadshotPercentage.HasValue;
 }
 
 public class MatchLineupEntryDto
@@ -26,4 +40,10 @@ public class MatchLineupEntryDto
     public bool Played { get; set; }
     // Null when not rated.
     public decimal? Rating { get; set; }
+    // Null when not recorded.
+    public int? Kills { get; set; }
+    public int? Deaths { get; set; }
+    public int? Assists { get; set; }
+    public decimal? Adr { get; set; }
+    public decimal? HeadshotPercentage { get; set; }
 }

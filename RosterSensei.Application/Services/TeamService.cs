@@ -83,7 +83,7 @@ public class TeamService : ITeamService
 
         var sender = await _teamRepository.GetTeamMemberAsync(teamId, senderUserId);
         if (sender == null || !sender.CanManageTeam)
-            return Result<string>.Forbidden("Only the team Owner, Captain or Officers can invite new players.");
+            return Result<string>.Forbidden("Only the team Owner, Captain, Officers or Coaches can invite new players.");
 
         var existingMember = await _teamRepository.GetTeamMemberAsync(teamId, targetUserId);
         if (existingMember != null)
@@ -127,7 +127,7 @@ public class TeamService : ITeamService
         if (memberToRemove == null) return Result<string>.NotFound("The User is not in the team.");
 
         if (team.OwnerId == memberIdToRemove)
-            return Result<string>.Failure("The Owner cannot be removed. Transfer ownership to an Officer or delete the team first.");
+            return Result<string>.Failure("The Owner cannot be removed. Transfer ownership to an Officer or a Coach or delete the team first.");
 
         // The checks above give clear messages; the delete repeats them so a concurrent ownership change can't slip through.
         if (!await _teamRepository.RemoveMemberAsync(teamId, memberIdToRemove, ownerId))
@@ -144,7 +144,7 @@ public class TeamService : ITeamService
 
         // A team always has an Owner, so the Owner hands the team on (or deletes it) before leaving.
         if (member.IsOwner)
-            return Result<string>.Failure("You own this team. Transfer ownership to an Officer or delete the team before leaving.");
+            return Result<string>.Failure("You own this team. Transfer ownership to an Officer or a Coach or delete the team before leaving.");
 
         if (!await _teamRepository.RemoveMemberAsync(teamId, userId, userId))
             return Result<string>.Failure("You became the Owner of this team in the meantime. Refresh and try again.");
@@ -314,10 +314,10 @@ public class TeamService : ITeamService
         if (newOwner == null)
             return Result<string>.NotFound("Member not found in the team.");
 
-        if (newOwner.Role != TeamRole.Officer)
-            return Result<string>.Failure("Ownership can only be transferred to an Officer. Make them an Officer first.");
+        if (!newOwner.Role.CanReceiveOwnership())
+            return Result<string>.Failure("Ownership can only be transferred to an Officer or a Coach. Make them an Officer or a Coach first.");
 
-        // Only ownership moves: both keep their roles, so the old Owner stays on as Captain, Officer or Player.
+        // Only ownership moves: both keep their roles.
         var outcome = await _teamRepository.TransferOwnershipAsync(teamId, currentOwnerId, newOwnerId, MaxOwnedTeams);
         if (outcome == WriteOutcome.Rejected)
             return Result<string>.Failure($"This member already owns {MaxOwnedTeams} teams and cannot take ownership of another.");

@@ -1,4 +1,4 @@
-using RosterSensei.Application.Common;
+﻿using RosterSensei.Application.Common;
 using RosterSensei.Application.DTOs;
 using RosterSensei.Application.Interfaces;
 using RosterSensei.Application.Validators;
@@ -237,7 +237,7 @@ public class MasterTesterService : IMasterTesterService
         if (replace)
         {
             var existing = await _db.Matches.Where(m => m.TeamId == teamId)
-                .Include(m => m.Maps).Include(m => m.Participations).Include(m => m.TeamStats)
+                .Include(m => m.Maps).Include(m => m.Participations)
                 .ToListAsync();
             _db.Matches.RemoveRange(existing);
             await _db.SaveChangesAsync();
@@ -438,16 +438,24 @@ public class MasterTesterService : IMasterTesterService
             Notes = Chance(0.3) ? Pick(MatchNotes) : null
         };
 
-        // Five who played, plus one on the bench when the roster has a sixth player. Players who played
-        // get an HLTV-style rating (around 1.00), a bit higher after a win; now and then one is left unrated.
+        // Five who played, plus one on the bench if there's a sixth player. Players get a rating around
+        // 1.00 (higher after a win) and stats that follow it; now and then one gets none.
         bool won = ourScore > theirScore;
+        int rounds = maps.Sum(m => m.OurScore!.Value + m.OpponentScore!.Value);
         foreach (var (player, index) in lineupPool.Take(6).Select((p, i) => (p, i)))
         {
-            bool played = index < 5;
-            decimal? rating = played && Chance(0.92)
-                ? Math.Clamp(Math.Round((decimal)(0.55 + _random.NextDouble() * 0.85 + (won ? 0.15 : 0)), 2), PlayerRating.Min, PlayerRating.Max)
-                : null;
-            match.Participations.Add(new MatchParticipation { UserId = player.UserId, Role = player.Role, Played = played, Rating = rating });
+            var participation = new MatchParticipation { UserId = player.UserId, Role = player.Role, Played = index < 5 };
+            if (participation.Played && Chance(0.92))
+            {
+                var form = 0.55 + _random.NextDouble() * 0.85 + (won ? 0.15 : 0);
+                participation.Rating = Math.Clamp(Math.Round((decimal)form, 2), PlayerRating.Min, PlayerRating.Max);
+                participation.Kills = Math.Clamp((int)Math.Round(rounds * 0.68 * form), 0, PlayerMatchStats.MaxCount);
+                participation.Deaths = Math.Clamp((int)Math.Round(rounds * (0.62 + _random.NextDouble() * 0.2 - (won ? 0.06 : 0))), 0, PlayerMatchStats.MaxCount);
+                participation.Assists = Math.Clamp((int)Math.Round(rounds * (0.1 + _random.NextDouble() * 0.15)), 0, PlayerMatchStats.MaxCount);
+                participation.Adr = Math.Clamp(Math.Round((decimal)(55 + form * 30 + _random.NextDouble() * 15), 1), 0m, PlayerMatchStats.MaxAdr);
+                participation.HeadshotPercentage = Math.Round((decimal)(35 + _random.NextDouble() * 30), 1);
+            }
+            match.Participations.Add(participation);
         }
 
         return match;
@@ -514,7 +522,7 @@ public class MasterTesterService : IMasterTesterService
         };
     }
 
-    // Members in lineup order (the Owner first), each with their usual in-game role.
+    // Members who can play, in lineup order (the Owner first), each with their usual in-game role.
     private async Task<List<(string UserId, string Role)>> LineupPoolAsync(int teamId)
     {
         var team = await _db.Teams.Include(t => t.Members).SingleAsync(t => t.Id == teamId);
@@ -522,6 +530,7 @@ public class MasterTesterService : IMasterTesterService
         var emails = await _userManager.Users.Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Email ?? "");
 
         return team.Members
+            .Where(m => m.Role.CanPlay())
             .OrderByDescending(m => m.UserId == team.OwnerId)
             .ThenBy(m => m.JoinedAt)
             .Select(m =>

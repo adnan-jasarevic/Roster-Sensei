@@ -72,9 +72,9 @@ public class CreateMatchDtoValidator : AbstractValidator<CreateMatchDto>
             .When(m => m.Lineup != null);
 
         RuleFor(m => m.Lineup)
-            .Must(lineup => lineup!.All(p => p.Rating == null))
+            .Must(lineup => lineup!.All(p => !p.HasStats))
             .When(m => m.Status != MatchStatus.Finished && m.Lineup != null)
-            .WithMessage("Ratings can only be added to a finished match.");
+            .WithMessage("Ratings and stats can only be added to a finished match.");
 
         RuleFor(m => m.Notes)
             .MaximumLength(1000).WithMessage("Notes cannot exceed 1000 characters.");
