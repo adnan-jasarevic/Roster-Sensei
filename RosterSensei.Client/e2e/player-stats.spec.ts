@@ -104,6 +104,34 @@ test.describe('Entering player stats', () => {
         expect(api.requestsTo('PUT', /lineup$/)).toHaveLength(0);
     });
 
+    test('the Lineup table moves down a column with Enter, like a spreadsheet', async ({ page, api }) => {
+        api.teams = [team(1, 'Tokyo Ronin', 'Captain', true, { matches: [finishedMatch(7, 'Kyoto Kitsune', 13, 9, '2026-10-20T18:00:00Z')] })];
+        await api.install(page);
+        await page.goto('/matches');
+
+        await page.getByRole('button', { name: 'Set lineup for the match vs Kyoto Kitsune' }).click();
+        const dialog = page.getByRole('dialog', { name: 'Lineup vs Kyoto Kitsune' });
+        for (const name of ['sensei', 'kenji', 'mika']) await dialog.getByRole('checkbox', { name, exact: true }).check();
+
+        // Kills straight down the column, Tab across to deaths.
+        await dialog.getByLabel('Kills of sensei').fill('20');
+        await page.keyboard.press('Enter');
+        await expect(dialog.getByLabel('Kills of kenji')).toBeFocused();
+        await page.keyboard.type('15');
+        await page.keyboard.press('Enter');
+        await page.keyboard.type('9');
+        await page.keyboard.press('ArrowUp');
+        await expect(dialog.getByLabel('Kills of kenji')).toBeFocused();
+        await page.keyboard.press('Tab');
+        await expect(dialog.getByLabel('Deaths of kenji')).toBeFocused();
+
+        // Enter on the last row saves.
+        await dialog.getByLabel('Kills of mika').press('Enter');
+        await expect(dialog).toBeHidden();
+        const [request] = api.requestsTo('PUT', /lineup$/);
+        expect((request.body as { players: { kills?: number }[] }).players.map(p => p.kills)).toEqual([20, 15, 9]);
+    });
+
     test('the Lineup dialog has no stats for a match without a result', async ({ page, api }) => {
         const t = team(1, 'Tokyo Ronin', 'Captain', true);
         t.matches = [{ ...finishedMatch(8, 'Osaka Oni', 0, 0, daysAgo(-3)), status: 'Scheduled', maps: [] }];

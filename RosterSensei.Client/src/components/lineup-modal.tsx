@@ -1,9 +1,10 @@
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useId, useState, type FormEvent, type KeyboardEvent } from 'react';
 import api from '../services/api';
 import { useAction } from '../hooks/use-action';
 import { useResource, type ResourceLoader } from '../hooks/use-resource';
 import { formatPlayerRating, parsePlayerRating } from '../lib/player-ratings';
-import { EMPTY_STATS, statsError, statsToRequest, statsToTyped, type TypedStats } from '../lib/match-stats';
+import { cx } from '../lib/cx';
+import { EMPTY_STATS, parseStat, statsError, statsToRequest, statsToTyped, type StatKey, type TypedStats } from '../lib/match-stats';
 import {
     hasResult,
     LINEUP_MAX_PLAYERS,
@@ -13,8 +14,7 @@ import {
     type SetLineupRequest,
     type TeamMember,
 } from '../types';
-import PlayerStatInputs from './player-stat-inputs';
-import { Alert, Button, Checkbox, ErrorState, Field, Input, LoadingRegion, Modal, Skeleton } from './ui';
+import { Alert, Button, ErrorState, LoadingRegion, Modal, Skeleton } from './ui';
 
 interface LineupModalProps {
     teamId: number;
@@ -34,6 +34,47 @@ interface Pick {
     rating: string;
     /** Kills, deaths, assists, ADR and HS% as typed; empty means not recorded. */
     stats: TypedStats;
+}
+
+/** The rating and stat columns of a finished match, in the order they're typed in. */
+const GRID_COLUMNS: { key: 'rating' | StatKey; label: string; title: string; numeric: boolean }[] = [
+    { key: 'rating', label: 'Rating', title: 'Rating', numeric: false },
+    { key: 'kills', label: 'K', title: 'Kills', numeric: true },
+    { key: 'deaths', label: 'D', title: 'Deaths', numeric: true },
+    { key: 'assists', label: 'A', title: 'Assists', numeric: true },
+    { key: 'adr', label: 'ADR', title: 'Average damage per round', numeric: false },
+    { key: 'headshotPercentage', label: 'HS%', title: 'Headshot percentage', numeric: false },
+];
+
+const headCell = 'border-b border-r border-line px-3 py-2 font-semibold last:border-r-0';
+
+// Borderless, so the table's grid lines are the only lines: it reads like a spreadsheet.
+const cellInput = cx(
+    'h-10 w-full bg-transparent px-3 text-base text-fg placeholder:text-fg-subtle sm:text-sm',
+    'focus:bg-sunken focus:outline-none focus:ring-2 focus:ring-inset focus:ring-fg',
+    'aria-invalid:bg-danger/10 aria-invalid:ring-2 aria-invalid:ring-inset aria-invalid:ring-danger',
+);
+
+const cellIsValid = (key: 'rating' | StatKey, text: string) =>
+    key === 'rating' ? parsePlayerRating(text).ok : parseStat(key, text).ok;
+
+/** Marks a cell with its row and column, so Enter and the arrow keys can move between rows. */
+const cellNavigation = (row: number, column: string) => ({ 'data-row': row, 'data-column': column });
+
+/** Enter or Arrow Down moves to the same column in the next row that has it, Arrow Up to the one above. */
+function moveBetweenRows(event: KeyboardEvent<HTMLTableSectionElement>) {
+    const input = event.target as HTMLElement;
+    const column = input.dataset.column;
+    if (!column || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const step = event.key === 'Enter' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+    if (step === 0) return;
+
+    const cells = Array.from(event.currentTarget.querySelectorAll<HTMLInputElement>(`input[data-column="${column}"]`));
+    const next = cells[cells.indexOf(input as HTMLInputElement) + step];
+    if (!next) return; // Enter on the last row submits the form as usual.
+    event.preventDefault();
+    next.focus();
+    next.select();
 }
 
 /** What's wrong with a typed rating, or undefined when it's fine (or empty). */
@@ -74,6 +115,16 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
     const starters = currentPicks.filter(p => p.played).length;
 
     const pickFor = (userId: string) => picks.find(p => p.userId === userId);
+
+    const errorsId = useId();
+    // Shown under the table once a save was tried, one line per player with a problem.
+    const errors = showErrors && canRate && members
+        ? members.flatMap(member => {
+            const pick = pickFor(member.id);
+            const message = pick?.played ? ratingErrorOf(pick.rating) ?? statsError(pick.stats) : undefined;
+            return message ? [{ userId: member.id, username: member.username, message }] : [];
+        })
+        : [];
 
     const toggle = (userId: string) => {
         setPicks(current => current.some(p => p.userId === userId)
@@ -124,8 +175,8 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
             open
             onClose={onClose}
             title={`Lineup vs ${match.opponentName}`}
-            description={`Pick up to ${LINEUP_MAX_PLAYERS} players. Untick "Played" for a substitute who didn't play. Roles${canRate ? ', ratings (0.01 to 99.99) and the scoreboard line for the whole match' : ''} are optional.`}
-            size={canRate ? 'lg' : 'md'}
+            description={`Tick up to ${LINEUP_MAX_PLAYERS} players. Untick "Played" for a substitute who didn't play. Every cell is optional${canRate ? '; stats are for the whole match, ratings from 0.01 to 99.99' : ''}.`}
+            size={canRate ? 'xl' : 'md'}
             busy={isSaving}
             closeOnBackdrop={false}
             footer={
@@ -156,73 +207,101 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
                         {currentPicks.length} of {LINEUP_MAX_PLAYERS} selected · {starters} played
                     </p>
 
-                    <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
-                        {(members ?? []).map(member => {
-                            const pick = pickFor(member.id);
-                            return (
-                                <li key={member.id} className="flex flex-col gap-2 p-2">
-                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                        <Checkbox
-                                            label={<span className="truncate font-semibold text-fg">{member.username}</span>}
-                                            checked={!!pick}
-                                            disabled={!pick && isFull}
-                                            onChange={() => toggle(member.id)}
-                                            className="min-w-0 sm:w-44 sm:shrink-0"
-                                        />
-                                        {pick && (
-                                            <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2 pl-8 sm:flex-nowrap sm:pl-0">
-                                                <Field label={`Role of ${member.username}`} hideLabel className="flex-1">
-                                                    <Input
+                    <div className="overflow-x-auto rounded-md border border-line" role="region" aria-label="Lineup table" tabIndex={-1}>
+                        <table className={cx('w-full border-separate border-spacing-0 text-sm', canRate ? 'min-w-[46rem]' : 'min-w-[26rem]')}>
+                            <caption className="sr-only">
+                                One row per team member. Tick a player to add them, then type in the cells. Enter moves down a column.
+                            </caption>
+                            <thead className="bg-sunken text-xs text-fg-muted">
+                                <tr>
+                                    <th scope="col" className={cx(headCell, 'sticky left-0 z-10 bg-sunken text-left')}>Player</th>
+                                    <th scope="col" className={cx(headCell, 'text-left')}>Role</th>
+                                    <th scope="col" className={cx(headCell, 'w-16 text-center')}>Played</th>
+                                    {canRate && GRID_COLUMNS.map(column => (
+                                        <th key={column.key} scope="col" className={cx(headCell, 'w-[4.5rem] text-right')}>
+                                            <abbr title={column.title} className="no-underline">{column.label}</abbr>
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody onKeyDown={moveBetweenRows} className="[&>tr:last-child>*]:border-b-0">
+                                {(members ?? []).map((member, rowIndex) => {
+                                    const pick = pickFor(member.id);
+                                    const canHaveStats = canRate && !!pick?.played;
+                                    return (
+                                        <tr key={member.id} className={cx(!pick && 'text-fg-subtle')}>
+                                            <th scope="row" className="sticky left-0 z-10 border-b border-r border-line bg-raised p-0 text-left font-normal">
+                                                <label className="flex h-10 cursor-pointer items-center gap-2.5 px-3 whitespace-nowrap">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="size-4 shrink-0 accent-(--rs-accent)"
+                                                        checked={!!pick}
+                                                        disabled={!pick && isFull}
+                                                        onChange={() => toggle(member.id)}
+                                                    />
+                                                    <span className={cx('font-semibold', pick ? 'text-fg' : 'text-fg-muted')}>{member.username}</span>
+                                                </label>
+                                            </th>
+                                            <td className="border-b border-r border-line p-0">
+                                                {pick && (
+                                                    <input
+                                                        {...cellNavigation(rowIndex, 'role')}
+                                                        aria-label={`Role of ${member.username}`}
                                                         value={pick.role}
                                                         onChange={e => update(member.id, { role: e.target.value })}
                                                         maxLength={LINEUP_MAX_ROLE_LENGTH}
-                                                        placeholder="Role, e.g. AWP"
+                                                        placeholder="e.g. AWP"
                                                         autoComplete="off"
-                                                        className="h-9"
+                                                        className={cx(cellInput, 'min-w-24 text-left')}
                                                     />
-                                                </Field>
-                                                <Checkbox
-                                                    label="Played"
-                                                    aria-label={`${member.username} played`}
-                                                    checked={pick.played}
-                                                    // A substitute who didn't play can't keep a rating or stats.
-                                                    onChange={e => update(member.id, e.target.checked ? { played: true } : { played: false, rating: '', stats: EMPTY_STATS })}
-                                                    className="mt-1.5 shrink-0"
-                                                />
-                                                {canRate && pick.played && (
-                                                    <Field
-                                                        label={`Rating of ${member.username}`}
-                                                        hideLabel
-                                                        error={showErrors ? ratingErrorOf(pick.rating) : undefined}
-                                                        className="w-28 shrink-0"
-                                                    >
-                                                        <Input
-                                                            value={pick.rating}
-                                                            onChange={e => update(member.id, { rating: e.target.value })}
-                                                            inputMode="decimal"
-                                                            placeholder="Rating"
-                                                            autoComplete="off"
-                                                            className="h-9"
-                                                        />
-                                                    </Field>
                                                 )}
-                                            </div>
-                                        )}
-                                    </div>
-                                    {canRate && pick?.played && (
-                                        <div className="pl-8 sm:pl-[11.5rem]">
-                                            <PlayerStatInputs
-                                                username={member.username}
-                                                value={pick.stats}
-                                                onChange={change => update(member.id, { stats: { ...pick.stats, ...change } })}
-                                                showErrors={showErrors}
-                                            />
-                                        </div>
-                                    )}
-                                </li>
-                            );
-                        })}
-                    </ul>
+                                            </td>
+                                            <td className="border-b border-r border-line p-0 text-center">
+                                                {pick && (
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`${member.username} played`}
+                                                        className="size-4 accent-(--rs-accent) align-middle"
+                                                        checked={pick.played}
+                                                        // A substitute who didn't play can't keep a rating or stats.
+                                                        onChange={e => update(member.id, e.target.checked ? { played: true } : { played: false, rating: '', stats: EMPTY_STATS })}
+                                                    />
+                                                )}
+                                            </td>
+                                            {canRate && GRID_COLUMNS.map(column => {
+                                                const text = !pick ? '' : column.key === 'rating' ? pick.rating : pick.stats[column.key];
+                                                const invalid = showErrors && canHaveStats && !cellIsValid(column.key, text);
+                                                return (
+                                                    <td key={column.key} className="border-b border-r border-line p-0 last:border-r-0">
+                                                        {canHaveStats && (
+                                                            <input
+                                                                {...cellNavigation(rowIndex, column.key)}
+                                                                aria-label={`${column.title} of ${member.username}`}
+                                                                aria-invalid={invalid || undefined}
+                                                                aria-describedby={invalid ? errorsId : undefined}
+                                                                value={text}
+                                                                onChange={e => update(member.id, column.key === 'rating'
+                                                                    ? { rating: e.target.value }
+                                                                    : { stats: { ...pick!.stats, [column.key]: e.target.value } })}
+                                                                inputMode={column.numeric ? 'numeric' : 'decimal'}
+                                                                autoComplete="off"
+                                                                className={cx(cellInput, 'w-full text-right tabular-nums')}
+                                                            />
+                                                        )}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    {errors.length > 0 && (
+                        <ul id={errorsId} className="flex flex-col gap-0.5 text-xs font-medium text-danger">
+                            {errors.map(error => <li key={error.userId}><span className="font-bold">{error.username}</span> {error.message}</li>)}
+                        </ul>
+                    )}
                     {isFull && <p className="text-xs text-fg-subtle">A lineup holds at most {LINEUP_MAX_PLAYERS} players. Untick someone to add another.</p>}
                 </form>
             )}
