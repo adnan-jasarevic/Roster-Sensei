@@ -18,7 +18,7 @@ import { Button, Modal } from './ui';
 interface MatchDetailsModalProps {
     match: Match;
     onClose: () => void;
-    /** Opens the Lineup dialog instead. Left out for members who can't change the lineup. */
+    /** Opens the Lineup dialog. Left out for members who can't edit it. */
     onEditLineup?: () => void;
 }
 
@@ -38,7 +38,7 @@ const COLUMNS: { label: string; title: string }[] = [
 
 const cell = 'border-b border-line px-3 py-2 text-right tabular-nums';
 
-/** Everything about one match: result, maps, and the scoreboard of the players who played. */
+/** One match: result, maps and scoreboard. */
 export default function MatchDetailsModal({ match, onClose, onEditLineup }: MatchDetailsModalProps) {
     const isFinished = hasResult(match);
     const players = match.lineup.filter(p => p.played);
@@ -157,7 +157,7 @@ function ScoreboardRow({ player }: { player: LineupEntry }) {
 
     return (
         <tr className="hover:bg-hover">
-            {/* Stays in view while the numbers scroll sideways on a phone. */}
+            {/* Stays in view when the table scrolls sideways. */}
             <th scope="row" className="sticky left-0 border-b border-line bg-raised px-3 py-2 text-left font-semibold whitespace-nowrap text-fg">
                 {player.username}
                 {player.role && <span className="ml-1.5 text-xs font-normal text-fg-subtle">{player.role}</span>}

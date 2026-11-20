@@ -78,10 +78,7 @@ export interface LineupEntry {
     played: boolean;
     /** 0.01 to 99.99. Null when not rated; only players who played in a finished match can be. */
     rating: number | null;
-    /**
-     * The scoreboard line for the whole match (all maps together). Same rules as the rating, each
-     * value optional. The API always sends them; null (or missing) means not recorded.
-     */
+    /** Totals for the whole match. Null (or missing) when not recorded. */
     kills?: number | null;
     deaths?: number | null;
     assists?: number | null;

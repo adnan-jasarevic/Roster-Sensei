@@ -77,7 +77,7 @@ const controlClasses = cx(
 
 export function Input({ id, required, className, 'aria-describedby': describedBy, 'aria-invalid': invalid, ...props }: ComponentPropsWithRef<'input'>) {
     const control = useFieldControl(id, required, describedBy);
-    // Outside a Field (or alongside one), an explicit aria-invalid still marks the input.
+    // An explicit aria-invalid works outside a Field too.
     return <input {...props} {...control} aria-invalid={control['aria-invalid'] ?? invalid} className={cx(controlClasses, 'read-only:bg-transparent h-11 px-3', className)} />;
 }
 

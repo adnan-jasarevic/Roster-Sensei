@@ -19,17 +19,16 @@ public class MatchParticipation
     // two decimals. Optional, and only for players who played in a finished match.
     public decimal? Rating { get; set; }
 
-    // The player's scoreboard line for the whole match (all maps of a series together). Each is optional
-    // and, like the rating, only for players who played in a finished match.
+    // Totals for the whole match. Optional; same rules as the rating.
     public int? Kills { get; set; }
     public int? Deaths { get; set; }
     public int? Assists { get; set; }
-    // Average damage per round, with at most one decimal.
+    // Average damage per round, one decimal.
     public decimal? Adr { get; set; }
-    // Share of kills that were headshots, 0 to 100 with at most one decimal.
+    // Headshot percentage, 0 to 100, one decimal.
     public decimal? HeadshotPercentage { get; set; }
 
-    // True when anything beyond who played and their role was recorded.
+    // True when a rating or any stat is recorded.
     public bool HasStats =>
         Rating.HasValue || Kills.HasValue || Deaths.HasValue || Assists.HasValue || Adr.HasValue || HeadshotPercentage.HasValue;
 
@@ -52,7 +51,7 @@ public static class PlayerRating
 
 public static class PlayerMatchStats
 {
-    // Kills, deaths and assists: a whole Bo5 stays well under this.
+    // For kills, deaths and assists.
     public const int MaxCount = 999;
     public const decimal MaxAdr = 999.9m;
     public const decimal MaxHeadshotPercentage = 100m;

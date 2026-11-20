@@ -6,8 +6,7 @@ using RosterSensei.Tests.Infrastructure;
 
 namespace RosterSensei.Tests;
 
-// Kills, deaths, assists, ADR and HS% per player per match: same rules as the rating (players who
-// played, finished matches only), entered with the result or later in the lineup.
+// Per-player match stats follow the rating's rules: players who played, finished matches only.
 public class PlayerMatchStatsTests : IDisposable
 {
     private readonly TestDatabase _db = new();

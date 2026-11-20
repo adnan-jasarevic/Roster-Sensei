@@ -438,9 +438,8 @@ public class MasterTesterService : IMasterTesterService
             Notes = Chance(0.3) ? Pick(MatchNotes) : null
         };
 
-        // Five who played, plus one on the bench when the roster has a sixth player. Players who played
-        // get an HLTV-style rating (around 1.00), a bit higher after a win, and a scoreboard line that
-        // roughly follows it; now and then one is left without stats.
+        // Five who played, plus one on the bench if there's a sixth player. Players get a rating around
+        // 1.00 (higher after a win) and stats that follow it; now and then one gets none.
         bool won = ourScore > theirScore;
         int rounds = maps.Sum(m => m.OurScore!.Value + m.OpponentScore!.Value);
         foreach (var (player, index) in lineupPool.Take(6).Select((p, i) => (p, i)))

@@ -124,7 +124,7 @@ public class MatchService : IMatchService
                 match.Participations.Add(player);
         }
 
-        // Only a finished match keeps ratings and stats: reopening or cancelling one drops them.
+        // Only a finished match keeps ratings and stats.
         if (match.Status != MatchStatus.Finished)
             foreach (var player in match.Participations)
                 player.ClearStats();
@@ -254,7 +254,7 @@ public class MatchService : IMatchService
                 UserId = p.UserId,
                 Role = string.IsNullOrWhiteSpace(p.Role) ? null : p.Role.Trim(),
                 Played = p.Played,
-                // A substitute who didn't play has no stats (the validator refuses them too).
+                // Substitutes have no stats.
                 Rating = p.Played ? p.Rating : null,
                 Kills = p.Played ? p.Kills : null,
                 Deaths = p.Played ? p.Deaths : null,

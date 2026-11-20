@@ -47,12 +47,12 @@ export interface PlayerStatsFilters {
 export interface PlayerStatsRow {
     userId: string;
     username: string;
-    /** Finished matches in the filter that the player played (substitutes who didn't play don't count). */
+    /** Finished matches the player played in the filter. */
     matches: number;
     wins: number;
     /** Wins out of matches played, 0 to 100. */
     winRate: number;
-    /** Kills per death over the matches with both recorded. Null when none have. */
+    /** Null when no match has kills and deaths. */
     killDeath: number | null;
     /** Average of the recorded ADRs, or null. */
     adr: number | null;
@@ -60,7 +60,7 @@ export interface PlayerStatsRow {
     headshotPercentage: number | null;
     /** Rated matches in the filter. */
     rated: number;
-    /** The rating columns are null for a player who played but was never rated. */
+    /** Null for a player who was never rated. */
     average: number | null;
     best: number | null;
     worst: number | null;
@@ -178,7 +178,7 @@ export function sortPlayerStats(rows: PlayerStatsRow[], sort: PlayerStatsSort): 
         } else {
             const x = a[sort.key];
             const y = b[sort.key];
-            // A player without the value (never rated, no stats recorded) goes last either way.
+            // Missing values always go last.
             byKey = x == null || y == null ? (x == null ? 1 : 0) - (y == null ? 1 : 0) : (x - y) * direction;
         }
         // Ties fall back to the name, so the order never jumps around.

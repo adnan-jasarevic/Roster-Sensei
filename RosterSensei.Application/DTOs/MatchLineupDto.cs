@@ -17,14 +17,13 @@ public class LineupPlayerDto
     // 0.01 to 99.99 with at most two decimals, or null when not rated. Only for a player who played,
     // in a finished match.
     public decimal? Rating { get; set; }
-    // The scoreboard line for the whole match. Same rules as the rating; each is optional.
-    // Kills, deaths and assists: 0 to 999.
+    // Totals for the whole match. Optional; same rules as the rating. K/D/A: 0 to 999.
     public int? Kills { get; set; }
     public int? Deaths { get; set; }
     public int? Assists { get; set; }
-    // 0 to 999.9, at most one decimal.
+    // 0 to 999.9, one decimal.
     public decimal? Adr { get; set; }
-    // 0 to 100, at most one decimal.
+    // 0 to 100, one decimal.
     public decimal? HeadshotPercentage { get; set; }
 
     [JsonIgnore]
@@ -41,7 +40,7 @@ public class MatchLineupEntryDto
     public bool Played { get; set; }
     // Null when not rated.
     public decimal? Rating { get; set; }
-    // Each null when not recorded.
+    // Null when not recorded.
     public int? Kills { get; set; }
     public int? Deaths { get; set; }
     public int? Assists { get; set; }

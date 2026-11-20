@@ -9,7 +9,7 @@ export type StatKey = 'kills' | 'deaths' | 'assists' | 'adr' | 'headshotPercenta
 
 export const STAT_KEYS: StatKey[] = ['kills', 'deaths', 'assists', 'adr', 'headshotPercentage'];
 
-/** Short labels for inputs and table headers, and the full name for screen readers and hints. */
+/** Short labels and full names. */
 export const STAT_LABELS: Record<StatKey, { short: string; long: string }> = {
     kills: { short: 'K', long: 'Kills' },
     deaths: { short: 'D', long: 'Deaths' },
@@ -52,7 +52,7 @@ export function parseStat(key: StatKey, input: string): ParsedStat {
     }
 }
 
-/** The first problem with a player's typed stats, or undefined when every field is fine (or empty). */
+/** The first problem with a player's typed stats, or undefined. */
 export function statsError(stats: TypedStats): string | undefined {
     for (const key of STAT_KEYS) {
         const parsed = parseStat(key, stats[key]);
@@ -61,7 +61,7 @@ export function statsError(stats: TypedStats): string | undefined {
     return undefined;
 }
 
-/** The typed stats as request fields; empty fields are left out. Call only once statsError is undefined. */
+/** Typed stats as request fields, leaving out empty ones. */
 export function statsToRequest(stats: TypedStats): Pick<LineupPlayer, StatKey> {
     const request: Pick<LineupPlayer, StatKey> = {};
     for (const key of STAT_KEYS) {
@@ -83,7 +83,7 @@ export function statsToTyped(entry: Partial<Pick<LineupEntry, StatKey>> | undefi
     };
 }
 
-/** The saved stats of an entry, ready to send back unchanged. */
+/** An entry's saved stats, to send back unchanged. */
 export function statsOf(entry: Partial<Pick<LineupEntry, StatKey>> | undefined): Pick<LineupPlayer, StatKey> {
     const kept: Pick<LineupPlayer, StatKey> = {};
     for (const key of STAT_KEYS) {
@@ -96,7 +96,7 @@ export function statsOf(entry: Partial<Pick<LineupEntry, StatKey>> | undefined):
 export const hasStats = (entry: Pick<LineupEntry, 'rating'> & Partial<Pick<LineupEntry, StatKey>>) =>
     entry.rating != null || STAT_KEYS.some(key => entry[key] != null);
 
-/** Kills per death. No deaths counts as one, so a flawless line still reads as a number. */
+/** Kills per death; zero deaths counts as one. */
 export const killDeathRatio = (kills: number, deaths: number) => kills / Math.max(deaths, 1);
 
 /** "1.25", "0.84". */
@@ -109,12 +109,12 @@ export const formatOneDecimal = (value: number) => value.toFixed(1);
 export const formatDifference = (value: number) => (value > 0 ? `+${value}` : String(value));
 
 export interface TeamTotals {
-    /** Players who played and have at least one value recorded. */
+    /** Players who played and have any value recorded. */
     players: number;
     kills: number | null;
     deaths: number | null;
     assists: number | null;
-    /** Team kills per team death, from players with both recorded. */
+    /** From players with both kills and deaths recorded. */
     killDeath: number | null;
     /** Mean of the players' ADR. */
     adr: number | null;
@@ -129,7 +129,7 @@ const mean = (values: number[]) => (values.length === 0 ? null : values.reduce((
 const recorded = (lineup: LineupEntry[], key: StatKey | 'rating') =>
     lineup.map(p => p[key]).filter((v): v is number => v != null);
 
-/** The team's line for a match, added up from the players who played. Null where nobody has a value. */
+/** The team's totals for a match. Null where nobody has a value. */
 export function teamTotals(lineup: LineupEntry[]): TeamTotals {
     const played = lineup.filter(p => p.played);
     const withBoth = played.filter(p => p.kills != null && p.deaths != null);

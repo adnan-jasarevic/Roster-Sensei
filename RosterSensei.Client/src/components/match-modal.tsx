@@ -67,9 +67,7 @@ const seriesScore = (match: Match) => {
 
 /**
  * The lineup to send with an edit of a finished match. The dialog only shows who played and their
- * ratings, so everything else is kept: roles, the scoreboard stats from the Lineup dialog, substitutes
- * who stay unticked, and players who have left the team since (they aren't listed, so they stay among
- * the picks as they were).
+ * ratings, so everything else is kept as it was: roles, stats, substitutes and players who have left.
  */
 function mergeLineup(match: Match, picks: PlayerPick[]): LineupPlayer[] {
     const existing = new Map(match.lineup.map(entry => [entry.userId, entry]));
@@ -81,7 +79,7 @@ function mergeLineup(match: Match, picks: PlayerPick[]): LineupPlayer[] {
             role: existing.get(p.userId)?.role ?? undefined,
             played: true,
             rating: rating.ok && rating.value !== null ? rating.value : undefined,
-            // Only a player who already played has stats to keep; a substitute moved in starts without.
+            // Keep stats only for players who already played.
             ...(existing.get(p.userId)?.played ? statsOf(existing.get(p.userId)) : {}),
         };
     });

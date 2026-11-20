@@ -58,7 +58,7 @@ const COLUMNS: { key: PlayerStatsSortKey; label: string; numeric: boolean; hint?
     { key: 'worst', label: 'Worst', numeric: true, hint: 'Worst match rating' },
 ];
 
-/** Results, scoreboard numbers and ratings per player, filtered by type, period, map and a minimum number of matches. */
+/** Results, stats and ratings per player, with filters. */
 export default function PlayerStatistics({ matches, typeFilter }: PlayerStatisticsProps) {
     const [period, setPeriod] = useState<PeriodFilter>(DEFAULT_PERIOD);
     const [map, setMap] = useState<string>(DEFAULT_MAP);

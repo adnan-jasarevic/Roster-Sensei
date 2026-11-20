@@ -33,11 +33,11 @@ interface Pick {
     played: boolean;
     /** As typed; empty means not rated. */
     rating: string;
-    /** Kills, deaths, assists, ADR and HS% as typed; empty means not recorded. */
+    /** Stats as typed; empty means not recorded. */
     stats: TypedStats;
 }
 
-/** The rating and stat columns of a finished match, in the order they're typed in. */
+/** Rating and stat columns, shown for a finished match. */
 const GRID_COLUMNS: { key: 'rating' | StatKey; label: string; title: string; numeric: boolean }[] = [
     { key: 'rating', label: 'Rating', title: 'Rating', numeric: false },
     { key: 'kills', label: 'K', title: 'Kills', numeric: true },
@@ -49,7 +49,7 @@ const GRID_COLUMNS: { key: 'rating' | StatKey; label: string; title: string; num
 
 const headCell = 'border-b border-r border-line px-3 py-2 font-semibold last:border-r-0';
 
-// Borderless, so the table's grid lines are the only lines: it reads like a spreadsheet.
+// Borderless cells, so it reads like a spreadsheet.
 const cellInput = cx(
     'h-10 w-full bg-transparent px-3 text-base text-fg placeholder:text-fg-subtle sm:text-sm',
     'focus:bg-sunken focus:outline-none focus:ring-2 focus:ring-inset focus:ring-fg',
@@ -59,10 +59,10 @@ const cellInput = cx(
 const cellIsValid = (key: 'rating' | StatKey, text: string) =>
     key === 'rating' ? parsePlayerRating(text).ok : parseStat(key, text).ok;
 
-/** Marks a cell with its row and column, so Enter and the arrow keys can move between rows. */
+/** Lets Enter and the arrow keys find the cell above or below. */
 const cellNavigation = (row: number, column: string) => ({ 'data-row': row, 'data-column': column });
 
-/** Enter or Arrow Down moves to the same column in the next row that has it, Arrow Up to the one above. */
+/** Enter or Arrow Down moves down a column, Arrow Up moves up. */
 function moveBetweenRows(event: KeyboardEvent<HTMLTableSectionElement>) {
     const input = event.target as HTMLElement;
     const column = input.dataset.column;
@@ -121,7 +121,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
     const pickFor = (userId: string) => picks.find(p => p.userId === userId);
 
     const errorsId = useId();
-    // Shown under the table once a save was tried, one line per player with a problem.
+    // Shown under the table after a save was tried.
     const errors = showErrors && canRate && members
         ? candidates.flatMap(member => {
             const pick = pickFor(member.id);
@@ -267,7 +267,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
                                                         aria-label={`${member.username} played`}
                                                         className="size-4 accent-(--rs-accent) align-middle"
                                                         checked={pick.played}
-                                                        // A substitute who didn't play can't keep a rating or stats.
+                                                        // Substitutes have no rating or stats.
                                                         onChange={e => update(member.id, e.target.checked ? { played: true } : { played: false, rating: '', stats: EMPTY_STATS })}
                                                     />
                                                 )}

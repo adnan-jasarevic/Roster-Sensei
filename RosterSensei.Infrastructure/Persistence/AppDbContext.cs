@@ -106,7 +106,7 @@ public class AppDbContext : IdentityDbContext<AppUser>
             participation.Property(p => p.Rating)
                 .HasPrecision(4, 2);
 
-            // 0 to 999.9 and 0 to 100, one decimal each.
+            // ADR up to 999.9, HS% up to 100.
             participation.Property(p => p.Adr)
                 .HasPrecision(4, 1);
             participation.Property(p => p.HeadshotPercentage)
