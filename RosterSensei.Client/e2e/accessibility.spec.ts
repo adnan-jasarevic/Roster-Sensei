@@ -18,7 +18,7 @@ const PAGES = [
 function withData(api: MockApi) {
     const withLineup = finishedMatch(1, 'Kyoto Kitsune', 13, 9, '2026-10-20T18:00:00Z');
     withLineup.lineup = [
-        { userId: 'kenji', username: 'kenji', role: 'AWP', played: true, rating: null },
+        { userId: 'kenji', username: 'kenji', role: 'AWP', played: true, rating: 1.21, kills: 22, deaths: 14, assists: 3, adr: 88.4, headshotPercentage: 41.2 },
         { userId: 'mika', username: 'mika', role: null, played: false, rating: null },
     ];
     const tokyo = team(1, 'Tokyo Ronin', 'Captain', true, {
@@ -42,6 +42,23 @@ async function open(page: Page, api: MockApi, path: string, signedIn: boolean, h
     await page.waitForTimeout(400);
 }
 
+/** Dialogs of the match with a scoreboard, opened from its row on the Matches page. */
+const MATCH_DIALOGS = [
+    { name: 'Match details', button: 'Details of the match vs Kyoto Kitsune', dialog: 'vs Kyoto Kitsune' },
+    { name: 'Lineup', button: 'Edit lineup for the match vs Kyoto Kitsune', dialog: 'Lineup vs Kyoto Kitsune' },
+];
+
+async function openMatchDialog(page: Page, api: MockApi, d: (typeof MATCH_DIALOGS)[number]) {
+    await open(page, api, '/matches', true, 'Matches');
+    await page.getByRole('button', { name: d.button }).click();
+    const dialog = page.getByRole('dialog', { name: d.dialog, exact: true });
+    await expect(dialog).toBeVisible();
+    // The roster loads inside the Lineup dialog.
+    await expect(dialog.getByRole('status').filter({ hasText: /^Loading/ })).toHaveCount(0);
+    await page.waitForTimeout(300);
+    return dialog;
+}
+
 for (const theme of ['dark', 'light'] as const) {
     test.describe(`accessibility scan, ${theme} theme`, () => {
         for (const p of PAGES) {
@@ -52,6 +69,21 @@ for (const theme of ['dark', 'light'] as const) {
                 expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(theme);
 
                 const results = await new AxeBuilder({ page })
+                    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+                    .analyze();
+
+                expect(results.violations.map(v => `${v.id}: ${v.help} (${v.nodes.map(n => n.target.join(' ')).join(', ')})`)).toEqual([]);
+            });
+        }
+
+        for (const d of MATCH_DIALOGS) {
+            test(`the ${d.name} dialog`, async ({ page, api }) => {
+                withData(api);
+                await page.addInitScript(t => localStorage.setItem('rs-theme', t), theme);
+                await openMatchDialog(page, api, d);
+
+                const results = await new AxeBuilder({ page })
+                    .include('dialog')
                     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
                     .analyze();
 
@@ -82,4 +114,16 @@ test.describe('no sideways scrolling at 320px', () => {
         const overflows = await page.getByRole('dialog').evaluate(d => d.scrollWidth > d.clientWidth + 1 || d.getBoundingClientRect().width > window.innerWidth);
         expect(overflows).toBe(false);
     });
+
+    for (const d of MATCH_DIALOGS) {
+        test(`the ${d.name} dialog`, async ({ page, api }) => {
+            withData(api);
+            const dialog = await openMatchDialog(page, api, d);
+
+            // The scoreboard table scrolls inside its own region, so the dialog itself never does.
+            const overflows = await dialog.evaluate(el => el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().width > window.innerWidth);
+            expect(overflows).toBe(false);
+            expect(await hasHorizontalScroll(page)).toBe(false);
+        });
+    }
 });

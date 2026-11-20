@@ -124,10 +124,10 @@ public class MatchService : IMatchService
                 match.Participations.Add(player);
         }
 
-        // Only a finished match keeps ratings: reopening or cancelling one drops them.
+        // Only a finished match keeps ratings and stats.
         if (match.Status != MatchStatus.Finished)
             foreach (var player in match.Participations)
-                player.Rating = null;
+                player.ClearStats();
 
         if (!await _matchRepository.UpdateAsync(match, dto.Version))
         {
@@ -213,13 +213,13 @@ public class MatchService : IMatchService
         var lineup = ToParticipations(players);
 
         // Match and membership checks run in the same transaction as the write.
-        var requireFinished = lineup.Any(p => p.Rating.HasValue);
+        var requireFinished = lineup.Any(p => p.HasStats);
         switch (await _matchRepository.ReplaceLineupAsync(teamId, matchId, lineup, requireFinished))
         {
             case LineupWriteOutcome.MatchNotFound:
                 return Result<List<MatchLineupEntryDto>>.NotFound("Match was not found.");
             case LineupWriteOutcome.MatchNotFinished:
-                return Result<List<MatchLineupEntryDto>>.Failure("Ratings can only be added to a finished match.");
+                return Result<List<MatchLineupEntryDto>>.Failure("Ratings and stats can only be added to a finished match.");
             case LineupWriteOutcome.NotTeamMembers:
                 return Result<List<MatchLineupEntryDto>>.Failure("Every player in the lineup must be a member of the team.");
             case LineupWriteOutcome.CoachInLineup:
@@ -254,7 +254,13 @@ public class MatchService : IMatchService
                 UserId = p.UserId,
                 Role = string.IsNullOrWhiteSpace(p.Role) ? null : p.Role.Trim(),
                 Played = p.Played,
-                Rating = p.Played ? p.Rating : null
+                // Substitutes have no stats.
+                Rating = p.Played ? p.Rating : null,
+                Kills = p.Played ? p.Kills : null,
+                Deaths = p.Played ? p.Deaths : null,
+                Assists = p.Played ? p.Assists : null,
+                Adr = p.Played ? p.Adr : null,
+                HeadshotPercentage = p.Played ? p.HeadshotPercentage : null
             })
             .ToList();
 
@@ -268,7 +274,12 @@ public class MatchService : IMatchService
                 Username = usernames.GetValueOrDefault(p.UserId) ?? "Unknown",
                 Role = p.Role,
                 Played = p.Played,
-                Rating = p.Rating
+                Rating = p.Rating,
+                Kills = p.Kills,
+                Deaths = p.Deaths,
+                Assists = p.Assists,
+                Adr = p.Adr,
+                HeadshotPercentage = p.HeadshotPercentage
             })
             .ToList();
 

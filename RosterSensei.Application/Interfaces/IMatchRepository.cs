@@ -7,7 +7,7 @@ public enum LineupWriteOutcome
 {
     Done,
     MatchNotFound,
-    // The lineup has ratings, but the match isn't finished.
+    // The lineup has ratings or stats, but the match isn't finished.
     MatchNotFinished,
     // A player isn't a member of the team (and wasn't already in this lineup).
     NotTeamMembers,

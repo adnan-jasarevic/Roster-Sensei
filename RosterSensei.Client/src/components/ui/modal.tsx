@@ -5,7 +5,7 @@ import { Alert } from './alert';
 import { Button, IconButton } from './button';
 import { Field, Input } from './field';
 
-const SIZES = { sm: 'sm:max-w-md', md: 'sm:max-w-lg', lg: 'sm:max-w-2xl' };
+const SIZES = { sm: 'sm:max-w-md', md: 'sm:max-w-lg', lg: 'sm:max-w-2xl', xl: 'sm:max-w-4xl' };
 
 export interface ModalProps {
     open: boolean;

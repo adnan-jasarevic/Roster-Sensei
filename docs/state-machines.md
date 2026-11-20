@@ -60,7 +60,7 @@ Live match back to Scheduled.)
 `MatchService.UpdateMatchAsync`). The Owner, Captain, Officers and Coaches can edit; an edit follows the same
 rules as adding a match (`UpdateMatchDtoValidator` includes `CreateMatchDtoValidator`).
 
-| Status | Scores | Ratings | Counts in statistics | Shown as |
+| Status | Scores | Ratings and player stats | Counts in statistics | Shown as |
 |---|---|---|---|---|
 | Scheduled | None allowed | None allowed | No | "Upcoming" while its time is ahead, "Needs result" once it has passed |
 | Finished | Series score, or worked out from map scores (`MatchService.SeriesScore`) | Optional, players who played | Yes | Result with outcome |
@@ -70,7 +70,7 @@ rules as adding a match (`UpdateMatchDtoValidator` includes `CreateMatchDtoValid
 |---|---|---|
 | Scheduled → Finished | "Add result" on a "Needs result" row, or Edit | Scores, maps, played date; who played and their ratings |
 | Finished → Finished | Edit | Corrections to anything |
-| Finished → Scheduled or Cancelled | Edit | Score back to 0 - 0, played date cleared, ratings dropped; the lineup stays |
+| Finished → Scheduled or Cancelled | Edit | Score back to 0 - 0, played date cleared, ratings and player stats (K, D, A, ADR, HS%) dropped; the lineup stays |
 | Scheduled ↔ Cancelled | Edit | Status only |
 
 **Two people editing at once:** every match has a `Version`, sent back with an edit. A save from an
@@ -78,10 +78,11 @@ older version is refused with 409 ("Someone else changed this match..."), checke
 database (`IsConcurrencyToken`), so two saves from the same version can't both win. The dialog keeps
 the message and the list behind it reloads.
 
-**The lineup on an edit:** left out, it's kept (minus ratings, if the match is no longer finished).
-Sent, it replaces the old one; its players must be on the team and not Coaches, or already in this lineup. The match
-form only shows who played and their ratings, so it sends back roles, unticked substitutes and
-players who have left as they were (`mergeLineup` in `match-modal.tsx`).
+**The lineup on an edit:** left out, it's kept (minus ratings and stats, if the match is no longer
+finished). Sent, it replaces the old one; its players must be on the team and not Coaches, or already
+in this lineup. The match form only shows who played and their ratings, so it sends back roles, the
+stats entered in the Lineup dialog, unticked substitutes and players who have left as they were
+(`mergeLineup` in `match-modal.tsx`).
 
 On the client the status is the `MatchStatusName` union, and functions name the questions pages
 ask: `hasResult` (Finished), `isUpcoming` (Scheduled, time still ahead) and `needsResult`
@@ -185,7 +186,7 @@ dialog carries its own data:
 |---|---|---|
 | Calendar | `ModalState` | closed, create, open, offDay, types |
 | Team roster | `Dialog` | none, invite, role, transfer, kick, leave, delete |
-| Matches | `Dialog` | none, addMatch, editMatch, lineup |
+| Matches | `Dialog` | none, addMatch, editMatch, lineup, details |
 
 A dialog is mounted only while it is the open one, so it starts clean every time. Two flags that
 are independent stay two flags: on the Account page the unlink confirmation opens over the change

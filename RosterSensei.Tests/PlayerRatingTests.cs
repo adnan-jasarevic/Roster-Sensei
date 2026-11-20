@@ -106,7 +106,7 @@ public class PlayerRatingTests : IDisposable
         var result = await _db.MatchService().SetLineupAsync(_owner, _teamId, matchId, new SetMatchLineupDto { Players = [Player(_player, 1.0m)] });
 
         Assert.False(result.Success);
-        Assert.Equal("Ratings can only be added to a finished match.", result.ErrorMessage);
+        Assert.Equal("Ratings and stats can only be added to a finished match.", result.ErrorMessage);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public class PlayerRatingTests : IDisposable
 
         var result = new CreateMatchDtoValidator().Validate(dto);
 
-        Assert.Contains(result.Errors, e => e.ErrorMessage == "Ratings can only be added to a finished match.");
+        Assert.Contains(result.Errors, e => e.ErrorMessage == "Ratings and stats can only be added to a finished match.");
     }
 
     [Fact]
