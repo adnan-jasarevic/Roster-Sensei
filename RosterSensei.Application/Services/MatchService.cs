@@ -27,7 +27,7 @@ public class MatchService : IMatchService
 
         var member = team.Members.FirstOrDefault(m => m.UserId == userId);
         if (member == null || !member.CanManageTeam)
-            return Result<MatchDto>.Forbidden("Only the team Owner, Captain or Officers can add matches.");
+            return Result<MatchDto>.Forbidden("Only the team Owner, Captain, Officers or Coaches can add matches.");
 
         var maps = ToMaps(dto.Maps);
 
@@ -37,6 +37,8 @@ public class MatchService : IMatchService
         var lineup = ToParticipations(dto.Lineup ?? new List<LineupPlayerDto>());
         if (lineup.Any(p => !team.Members.Any(m => m.UserId == p.UserId)))
             return Result<MatchDto>.Failure("Every player in the lineup must be a member of the team.");
+        if (lineup.Any(p => team.Members.Any(m => m.UserId == p.UserId && !m.Role.CanPlay())))
+            return Result<MatchDto>.Failure(CoachInLineupMessage);
 
         var newMatch = new Match
         {
@@ -62,6 +64,8 @@ public class MatchService : IMatchService
         return Result<MatchDto>.SuccessResult(resultDto);
     }
 
+    private const string CoachInLineupMessage = "Coaches can't be put in a lineup.";
+
     private const string EditConflictMessage =
         "Someone else changed this match while you were editing it. Open it again to see their changes.";
 
@@ -73,7 +77,7 @@ public class MatchService : IMatchService
 
         var member = team.Members.FirstOrDefault(m => m.UserId == userId);
         if (member == null || !member.CanManageTeam)
-            return Result<MatchDto>.Forbidden("Only the team Owner, Captain or Officers can edit matches.");
+            return Result<MatchDto>.Forbidden("Only the team Owner, Captain, Officers or Coaches can edit matches.");
 
         var match = await _matchRepository.GetForEditAsync(teamId, matchId);
         if (match == null)
@@ -81,15 +85,18 @@ public class MatchService : IMatchService
         if (match.Version != dto.Version)
             return Result<MatchDto>.Conflict(EditConflictMessage);
 
-        // A sent lineup replaces the old one. Its players must be on the team, or already in this
-        // lineup: someone who has left since keeps their place in the match's history.
+        // A sent lineup replaces the old one. New players must be members who aren't Coaches;
+        // players already in it keep their place even if they left or became a Coach.
         List<MatchParticipation>? lineup = null;
         if (dto.Lineup != null)
         {
             lineup = ToParticipations(dto.Lineup);
-            var allowed = team.Members.Select(m => m.UserId).Concat(match.Participations.Select(p => p.UserId)).ToHashSet();
-            if (lineup.Any(p => !allowed.Contains(p.UserId)))
+            var existing = match.Participations.Select(p => p.UserId).ToHashSet();
+            var newcomers = lineup.Where(p => !existing.Contains(p.UserId)).ToList();
+            if (newcomers.Any(p => !team.Members.Any(m => m.UserId == p.UserId)))
                 return Result<MatchDto>.Failure("Every player in the lineup must be a member of the team.");
+            if (newcomers.Any(p => team.Members.Any(m => m.UserId == p.UserId && !m.Role.CanPlay())))
+                return Result<MatchDto>.Failure(CoachInLineupMessage);
         }
 
         var maps = ToMaps(dto.Maps);
@@ -197,7 +204,7 @@ public class MatchService : IMatchService
 
         var requester = team.Members.FirstOrDefault(m => m.UserId == userId);
         if (requester == null || !requester.CanManageTeam)
-            return Result<List<MatchLineupEntryDto>>.Forbidden("Only the team Owner, Captain or Officers can set a lineup.");
+            return Result<List<MatchLineupEntryDto>>.Forbidden("Only the team Owner, Captain, Officers or Coaches can set a lineup.");
 
         var players = dto.Players ?? new List<LineupPlayerDto>();
         if (players.Select(p => p.UserId).Distinct().Count() != players.Count)
@@ -215,6 +222,8 @@ public class MatchService : IMatchService
                 return Result<List<MatchLineupEntryDto>>.Failure("Ratings and stats can only be added to a finished match.");
             case LineupWriteOutcome.NotTeamMembers:
                 return Result<List<MatchLineupEntryDto>>.Failure("Every player in the lineup must be a member of the team.");
+            case LineupWriteOutcome.CoachInLineup:
+                return Result<List<MatchLineupEntryDto>>.Failure(CoachInLineupMessage);
             case LineupWriteOutcome.Conflict:
                 return Result<List<MatchLineupEntryDto>>.Conflict("Someone else changed this lineup at the same time. Refresh and try again.");
         }

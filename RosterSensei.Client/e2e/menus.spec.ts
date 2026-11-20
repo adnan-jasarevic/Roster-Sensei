@@ -1,4 +1,5 @@
 import { test, expect, focused, chooseOption } from './support/fixtures';
+import { member } from './support/mock-api';
 
 test.describe('roster action menu', () => {
     test('works with the keyboard: arrows move, Esc closes and returns focus', async ({ page, api }) => {
@@ -27,18 +28,30 @@ test.describe('roster action menu', () => {
         await expect(trigger).toBeFocused();
     });
 
-    test('transfer is unavailable for a non-Officer and says why', async ({ page, api }) => {
+    test('transfer is unavailable for a Player and says why', async ({ page, api }) => {
         await api.install(page);
         await page.goto('/team');
 
         await page.getByRole('button', { name: 'Actions for kenji' }).click();
         const transfer = page.getByRole('menuitem', { name: /Transfer ownership/ });
         await expect(transfer).toHaveAttribute('aria-disabled', 'true');
-        await expect(transfer).toContainText('Make them an Officer first');
+        await expect(transfer).toContainText('Make them an Officer or a Coach first');
 
         // aria-disabled keeps it focusable and readable, so it can still be clicked: nothing happens.
         await transfer.click({ force: true });
         await expect(page.getByRole('dialog')).toBeHidden();
+    });
+
+    test('ownership can be transferred to a Coach', async ({ page, api }) => {
+        api.teams[0].members.push(member('hiro', 'Coach'));
+        await api.install(page);
+        await page.goto('/team');
+
+        await page.getByRole('button', { name: 'Actions for hiro' }).click();
+        const transfer = page.getByRole('menuitem', { name: /Transfer ownership/ });
+        await expect(transfer).not.toHaveAttribute('aria-disabled', 'true');
+        await transfer.click();
+        await expect(page.getByRole('dialog', { name: /Transfer ownership/ })).toBeVisible();
     });
 
     test('after kicking a player, focus stays in the page instead of being lost', async ({ page, api }) => {

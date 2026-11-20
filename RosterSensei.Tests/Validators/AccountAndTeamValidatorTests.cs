@@ -89,7 +89,7 @@ public class AccountAndTeamValidatorTests
     [Theory]
     [InlineData("")]
     [InlineData("Owner")]
-    [InlineData("Coach")]
+    [InlineData("Manager")]
     [InlineData("3")]
     [InlineData("99")]
     public void An_unknown_role_is_rejected(string role) =>

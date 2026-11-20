@@ -9,6 +9,7 @@ import {
     hasResult,
     LINEUP_MAX_PLAYERS,
     LINEUP_MAX_ROLE_LENGTH,
+    lineupCandidates,
     type LineupEntry,
     type Match,
     type SetLineupRequest,
@@ -107,6 +108,9 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
     const isSaving = save.isRunning;
 
     const memberIds = new Set(members?.map(m => m.id));
+    // Coaches are hidden unless they were already in this lineup.
+    const [savedIds] = useState(() => new Set((match.lineup ?? []).map(entry => entry.userId)));
+    const candidates = members ? lineupCandidates(members, savedIds) : [];
     // Players in the saved lineup who have since left the team. The API only accepts current
     // members, so they are dropped when saving.
     const formerPlayers = members ? (match.lineup ?? []).filter(entry => !memberIds.has(entry.userId)) : [];
@@ -119,7 +123,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
     const errorsId = useId();
     // Shown under the table once a save was tried, one line per player with a problem.
     const errors = showErrors && canRate && members
-        ? members.flatMap(member => {
+        ? candidates.flatMap(member => {
             const pick = pickFor(member.id);
             const message = pick?.played ? ratingErrorOf(pick.rating) ?? statsError(pick.stats) : undefined;
             return message ? [{ userId: member.id, username: member.username, message }] : [];
@@ -225,7 +229,7 @@ export default function LineupModal({ teamId, match, onClose, onSaved, onMatchMi
                                 </tr>
                             </thead>
                             <tbody onKeyDown={moveBetweenRows} className="[&>tr:last-child>*]:border-b-0">
-                                {(members ?? []).map((member, rowIndex) => {
+                                {candidates.map((member, rowIndex) => {
                                     const pick = pickFor(member.id);
                                     const canHaveStats = canRate && !!pick?.played;
                                     return (

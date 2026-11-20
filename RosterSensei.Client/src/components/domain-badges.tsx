@@ -1,4 +1,4 @@
-import { Check, Crown, Hourglass, Minus, Shield, Star, X } from 'lucide-react';
+import { Check, ClipboardList, Crown, Hourglass, Minus, Shield, Star, X } from 'lucide-react';
 import type { MatchOutcome, MatchStatusName, TeamRole } from '../types';
 import { Badge, type BadgeTone } from './ui';
 
@@ -29,6 +29,7 @@ const ROLES: Record<TeamRole, { tone: BadgeTone; icon?: React.ReactNode }> = {
     Captain: { tone: 'warning', icon: <Star /> },
     Officer: { tone: 'neutral', icon: <Shield /> },
     Player: { tone: 'neutral' },
+    Coach: { tone: 'neutral', icon: <ClipboardList /> },
 };
 
 /** Ownership isn't a role: the Owner also has a role, so this badge sits next to RoleBadge. */

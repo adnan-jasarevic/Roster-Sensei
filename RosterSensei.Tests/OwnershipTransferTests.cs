@@ -60,7 +60,7 @@ public class OwnershipTransferTests : IDisposable
     }
 
     [Fact]
-    public async Task Only_Officers_can_receive_ownership()
+    public async Task Players_cannot_receive_ownership()
     {
         var result = await _db.TeamService().TransferOwnershipAsync(_teamId, _owner, _player);
 

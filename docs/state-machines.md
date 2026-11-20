@@ -29,7 +29,7 @@ Accepted, Declined and Canceled are final. Tests: `InviteTests`.
 
 ### Team membership and ownership
 
-A member has a role (`TeamRole`: Captain, Officer or Player). Ownership is separate: `Team.OwnerId`
+A member has a role (`TeamRole`: Captain, Officer, Player or Coach). Ownership is separate: `Team.OwnerId`
 points at one member, who also has a role.
 
 | Transition | Who | Rule | Enforced in |
@@ -37,14 +37,16 @@ points at one member, who also has a role.
 | Create team | Anyone | They become Owner and Captain. At most 3 owned teams. | `TeamService.CreateTeamAsync`, `TeamRepository.AddOwnedTeamAsync` |
 | Join | Invited user | Joins as Player. | `CompletePendingInviteAsync` |
 | Change role | Owner | Any role, their own too. Only one Captain per team. | `ChangeMemberRoleAsync`, unique index |
-| Transfer ownership | Owner | Only to an Officer who owns fewer than 3 teams. Roles don't change. | `TransferOwnershipAsync` |
+| Transfer ownership | Owner | Only to an Officer or a Coach who owns fewer than 3 teams. Roles don't change. | `TransferOwnershipAsync` |
 | Leave | Any member except the Owner | The Owner transfers or deletes first. | `LeaveTeamAsync`, `RemoveMemberAsync` |
 | Kick | Owner | Not the Owner themselves. | `RemoveMemberAsync` |
 | Delete team | Owner | Takes matches, events, members and invites with it. | `DeleteTeamAsync` |
 
-"Can manage the team" (invites, matches, calendar) means Owner, Captain or Officer:
+"Can manage the team" (invites, matches, calendar) means Owner, Captain, Officer or Coach:
 `TeamMember.CanManageTeam` on the server, `canManageTeam` in `src/types/index.ts` on the client.
-The client also has `canReceiveOwnership` for the transfer rule. Tests: `TeamRoleTests`,
+The client also has `canReceiveOwnership` for the transfer rule. Coaches can't be added to a lineup
+(`TeamRole.CanPlay`, `lineupCandidates` on the client); one who was already in a lineup before becoming
+a Coach keeps that place. Tests: `CoachRoleTests`, `TeamRoleTests`,
 `RolePermissionTests`, `OwnershipTransferTests`, `LeaveAndDeleteTeamTests`, `ConcurrentChangeTests`,
 `e2e/permissions.spec.ts`.
 
@@ -55,7 +57,7 @@ removed: nobody marks a match live for the hour it runs. The `AddMatchVersion` m
 Live match back to Scheduled.)
 
 **Any status can move to any other**, by editing the match (`PUT /api/Matches/{teamId}/{matchId}`,
-`MatchService.UpdateMatchAsync`). The Owner, Captain and Officers can edit; an edit follows the same
+`MatchService.UpdateMatchAsync`). The Owner, Captain, Officers and Coaches can edit; an edit follows the same
 rules as adding a match (`UpdateMatchDtoValidator` includes `CreateMatchDtoValidator`).
 
 | Status | Scores | Ratings and player stats | Counts in statistics | Shown as |
@@ -77,10 +79,10 @@ database (`IsConcurrencyToken`), so two saves from the same version can't both w
 the message and the list behind it reloads.
 
 **The lineup on an edit:** left out, it's kept (minus ratings and stats, if the match is no longer
-finished). Sent, it replaces the old one; its players must be on the team or already in this lineup.
-The match form only shows who played and their ratings, so it sends back roles, the stats entered in
-the Lineup dialog, unticked substitutes and players who have left as they were (`mergeLineup` in
-`match-modal.tsx`).
+finished). Sent, it replaces the old one; its players must be on the team and not Coaches, or already
+in this lineup. The match form only shows who played and their ratings, so it sends back roles, the
+stats entered in the Lineup dialog, unticked substitutes and players who have left as they were
+(`mergeLineup` in `match-modal.tsx`).
 
 On the client the status is the `MatchStatusName` union, and functions name the questions pages
 ask: `hasResult` (Finished), `isUpcoming` (Scheduled, time still ahead) and `needsResult`
