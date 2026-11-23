@@ -3,6 +3,7 @@ using RosterSensei.Application.Services;
 using RosterSensei.Infrastructure.Identity;
 using RosterSensei.Infrastructure.Persistence;
 using RosterSensei.Infrastructure.Repositories;
+using RosterSensei.Infrastructure.Steam;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -87,6 +88,9 @@ builder.Services.AddScoped<ITeamOffDayRepository, TeamOffDayRepository>();
 builder.Services.AddScoped<ITeamOffDayService, TeamOffDayService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+// Steam sign-in returns to the same frontend origins CORS allows. Names and avatars come from public
+// Steam profiles, so no Steam Web API key is needed.
+builder.Services.AddSteam(allowedOrigins);
 builder.Services.AddScoped<IMapRatingRepository, MapRatingRepository>();
 builder.Services.AddScoped<IMapPoolService, MapPoolService>();
 // Test data tools. Off unless MasterTester:Enabled is true (Development only) and the user is listed in MasterTester:Emails.

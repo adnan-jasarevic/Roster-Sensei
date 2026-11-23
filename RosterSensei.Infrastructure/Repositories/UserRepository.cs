@@ -19,38 +19,53 @@ public class UserRepository : IUserRepository
         return await _context.Users.AnyAsync(u => u.Id == userId, cancellationToken);
     }
 
-    public async Task<string?> GetSteamIdAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task<SteamLink?> GetSteamLinkAsync(string userId, CancellationToken cancellationToken = default)
     {
         return await _context.Users
             .Where(u => u.Id == userId)
-            .Select(u => u.SteamId)
+            .Select(u => new SteamLink(u.SteamId, u.SteamVerified))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<string?> GetUserIdBySteamIdAsync(string steamId, CancellationToken cancellationToken = default)
+    public async Task<WriteOutcome> LinkVerifiedSteamIdAsync(string userId, string steamId)
     {
-        return await _context.Users
-            .Where(u => u.SteamId == steamId)
-            .Select(u => u.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
-
-    public async Task<WriteOutcome> SetSteamIdAsync(string userId, string? steamId)
-    {
+        // Single-column UPDATEs: they don't load the user, so they can't overwrite a concurrent password or
+        // profile change, and they don't trip Identity's ConcurrencyStamp check. The transaction makes
+        // "free the unverified claim, then link" one step.
+        await using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
-            // A single UPDATE of one column: it doesn't load the user, so it can't overwrite a concurrent
-            // password or profile change, and it doesn't trip Identity's ConcurrencyStamp check.
+            await _context.Users
+                .Where(u => u.SteamId == steamId && u.Id != userId && !u.SteamVerified)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.SteamId, (string?)null));
+
             var updated = await _context.Users
                 .Where(u => u.Id == userId)
-                .ExecuteUpdateAsync(s => s.SetProperty(u => u.SteamId, steamId));
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(u => u.SteamId, steamId)
+                    .SetProperty(u => u.SteamVerified, true));
 
-            return updated == 1 ? WriteOutcome.Done : WriteOutcome.Rejected;
+            if (updated != 1)
+                return WriteOutcome.Rejected;
+
+            await transaction.CommitAsync();
+            return WriteOutcome.Done;
         }
-        // The unique index on SteamId rejects a second user linking the same account.
+        // The unique index on SteamId: another user has this account verified, or linked it at the same moment.
         catch (Exception ex) when (ex is DbUpdateException or DbException)
         {
             return WriteOutcome.Conflict;
         }
+    }
+
+    public async Task<WriteOutcome> ClearSteamIdAsync(string userId)
+    {
+        var updated = await _context.Users
+            .Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.SteamId, (string?)null)
+                .SetProperty(u => u.SteamVerified, false));
+
+        return updated == 1 ? WriteOutcome.Done : WriteOutcome.Rejected;
     }
 }

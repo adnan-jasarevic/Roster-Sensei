@@ -24,11 +24,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly SqliteConnection _keepAlive;
 
     private readonly IReadOnlyDictionary<string, string> _settings;
+    private readonly Action<IServiceCollection>? _configureServices;
 
-    // Extra configuration, e.g. to switch on the master tester tools.
-    public ApiFactory(IReadOnlyDictionary<string, string>? settings = null)
+    // Extra configuration, e.g. to switch on the master tester tools, and service overrides, e.g. a fake Steam.
+    public ApiFactory(IReadOnlyDictionary<string, string>? settings = null, Action<IServiceCollection>? configureServices = null)
     {
         _settings = settings ?? new Dictionary<string, string>();
+        _configureServices = configureServices;
         _keepAlive = new SqliteConnection(_connectionString);
         _keepAlive.Open();
     }
@@ -47,6 +49,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<DbContextOptions<AppDbContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
             services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connectionString));
+            _configureServices?.Invoke(services);
         });
     }
 
