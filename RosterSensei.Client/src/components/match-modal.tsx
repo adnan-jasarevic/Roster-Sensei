@@ -61,7 +61,7 @@ const toLocalInput = (iso: string) => format(new Date(iso), "yyyy-MM-dd'T'HH:mm"
 
 /** The series score of a finished match, read from "13 - 9". */
 const seriesScore = (match: Match) => {
-    const [ours, theirs] = match.finalScore.split(' - ').map(Number);
+    const [ours, theirs] = (match.finalScore ?? '').split(' - ').map(Number);
     return { ours: Number.isFinite(ours) ? ours : 0, theirs: Number.isFinite(theirs) ? theirs : 0 };
 };
 

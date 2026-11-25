@@ -55,12 +55,12 @@ export interface Match {
     playedDate?: string;
     status: MatchStatusName;
     type: MatchKindName;
-    /** "0 - 0" until the match is finished: only show it when `hasResult` is true. */
-    finalScore: string;
+    /** "13 - 9" once the match is finished (`hasResult`), null before that. */
+    finalScore: string | null;
     bestOf?: number;
     maps: MatchMap[];
-    /** "Draw" until the match is finished: only show it when `hasResult` is true. */
-    matchOutcome: MatchOutcome;
+    /** The result once the match is finished (`hasResult`), null before that. */
+    matchOutcome: MatchOutcome | null;
     notes?: string;
     /** Who was in the lineup, players who played first. Empty when it wasn't recorded. */
     lineup: LineupEntry[];
@@ -132,8 +132,9 @@ export interface MatchResponse {
     scheduledDate: string;
     playedDate?: string;
     status: MatchStatusName;
-    finalScore?: string;
-    matchOutcome?: MatchOutcome;
+    /** Null until the match is finished. */
+    finalScore?: string | null;
+    matchOutcome?: MatchOutcome | null;
 }
 
 export interface TeamDashboardData {

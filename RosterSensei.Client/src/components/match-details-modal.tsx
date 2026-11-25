@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { UsersRound } from 'lucide-react';
 import { cx } from '../lib/cx';
 import { formatDateTime } from '../lib/format';
@@ -12,7 +13,7 @@ import {
 } from '../lib/match-stats';
 import { hasResult, type LineupEntry, type Match } from '../types';
 import { MapChip } from './map-chip';
-import { MatchStatusBadge, OutcomeBadge } from './domain-badges';
+import { MatchStateBadge } from './domain-badges';
 import { Button, Modal } from './ui';
 
 interface MatchDetailsModalProps {
@@ -41,6 +42,8 @@ const cell = 'border-b border-line px-3 py-2 text-right tabular-nums';
 /** One match: result, maps and scoreboard. */
 export default function MatchDetailsModal({ match, onClose, onEditLineup }: MatchDetailsModalProps) {
     const isFinished = hasResult(match);
+    // Decides between the Upcoming and Needs result tags.
+    const [now] = useState(() => new Date());
     const players = match.lineup.filter(p => p.played);
     const substitutes = match.lineup.filter(p => !p.played);
     const anyStats = players.some(hasStats);
@@ -73,7 +76,7 @@ export default function MatchDetailsModal({ match, onClose, onEditLineup }: Matc
         >
             <div className="flex flex-col gap-5">
                 <div className="flex flex-wrap items-center gap-3">
-                    {isFinished ? <OutcomeBadge outcome={match.matchOutcome} /> : <MatchStatusBadge status={match.status} />}
+                    <MatchStateBadge match={match} now={now} />
                     {isFinished && <span className="font-display text-2xl font-black text-fg tabular-nums">{match.finalScore}</span>}
                     {match.maps.length > 0 && (
                         <ul aria-label="Maps" className="flex flex-wrap gap-1.5 sm:ml-auto">

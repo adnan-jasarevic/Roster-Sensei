@@ -228,7 +228,7 @@ public class TeamService : ITeamService
             PlayedDate = m.PlayedDate,
             Status = m.Status.ToString(),
             FinalScore = m.FinalScore,
-            MatchOutcome = m.Outcome.ToString()
+            MatchOutcome = m.Outcome?.ToString()
         }).ToList();
 
         return Result<TeamDashboardDto>.SuccessResult(dashboard);

@@ -1,5 +1,5 @@
-import { Check, ClipboardList, Crown, Hourglass, Minus, Shield, Star, X } from 'lucide-react';
-import type { MatchOutcome, MatchStatusName, TeamRole } from '../types';
+import { CalendarClock, Check, ClipboardList, Crown, Hourglass, Minus, Shield, Star, X } from 'lucide-react';
+import { type Match, type MatchOutcome, type MatchStatusName, type TeamRole, hasResult, needsResult } from '../types';
 import { Badge, type BadgeTone } from './ui';
 
 const OUTCOMES: Record<MatchOutcome, { tone: BadgeTone; icon: React.ReactNode }> = {
@@ -8,7 +8,7 @@ const OUTCOMES: Record<MatchOutcome, { tone: BadgeTone; icon: React.ReactNode }>
     Draw: { tone: 'neutral', icon: <Minus /> },
 };
 
-export function OutcomeBadge({ outcome }: { outcome?: MatchOutcome }) {
+export function OutcomeBadge({ outcome }: { outcome?: MatchOutcome | null }) {
     const config = outcome ? OUTCOMES[outcome] : undefined;
     if (!config) return <Badge className="w-16">{outcome || 'N/A'}</Badge>;
     return <Badge tone={config.tone} icon={config.icon} className="w-16">{outcome}</Badge>;
@@ -22,6 +22,22 @@ export function MatchStatusBadge({ status }: { status: MatchStatusName }) {
 /** A scheduled match whose time has passed without a result being recorded. */
 export function NeedsResultBadge() {
     return <Badge tone="warning" icon={<Hourglass />} className="min-w-16">Needs result</Badge>;
+}
+
+/** A scheduled match whose time hasn't come yet. */
+export function UpcomingBadge() {
+    return <Badge tone="accent" icon={<CalendarClock />} className="min-w-16">Upcoming</Badge>;
+}
+
+/**
+ * The one tag a match gets: its result once finished, "Needs result" when its time has passed
+ * without a score, "Upcoming" before that, or "Cancelled".
+ */
+export function MatchStateBadge({ match, now }: { match: Pick<Match, 'status' | 'scheduledDate' | 'matchOutcome'>; now: Date }) {
+    if (hasResult(match)) return <OutcomeBadge outcome={match.matchOutcome} />;
+    if (needsResult(match, now)) return <NeedsResultBadge />;
+    if (match.status === 'Scheduled') return <UpcomingBadge />;
+    return <MatchStatusBadge status={match.status} />;
 }
 
 // Every role is listed, so adding one to TeamRole won't compile until its badge is decided here.
