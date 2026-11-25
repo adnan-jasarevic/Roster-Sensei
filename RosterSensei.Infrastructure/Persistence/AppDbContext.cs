@@ -55,6 +55,13 @@ public class AppDbContext : IdentityDbContext<AppUser>
                 .HasFilter("[SteamId] IS NOT NULL");
 
             user.Property(u => u.SteamVerified).HasDefaultValue(false);
+
+            // One account per email, even when two sign-ups with the same email arrive at the same time.
+            // Identity's own check runs before the insert, so on its own it can't stop that race.
+            user.HasIndex(u => u.NormalizedEmail)
+                .HasDatabaseName("EmailIndex")
+                .IsUnique()
+                .HasFilter("[NormalizedEmail] IS NOT NULL");
         });
 
         builder.Entity<TeamMember>()
