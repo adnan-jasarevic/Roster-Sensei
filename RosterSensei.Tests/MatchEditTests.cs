@@ -1,4 +1,4 @@
-using RosterSensei.Application.Common;
+﻿using RosterSensei.Application.Common;
 using RosterSensei.Application.DTOs;
 using RosterSensei.Application.Validators;
 using RosterSensei.Domain.Entities;
@@ -131,7 +131,8 @@ public class MatchEditTests : IDisposable
         Assert.True(result.Success, result.ErrorMessage);
         var stored = await StoredAsync(match.Id);
         Assert.Equal(status.ToString(), stored.Status);
-        Assert.Equal("0 - 0", stored.FinalScore);
+        Assert.Null(stored.FinalScore);
+        Assert.Null(stored.MatchOutcome);
         Assert.Null(stored.PlayedDate);
         Assert.Null(Assert.Single(stored.Lineup).Rating);
     }

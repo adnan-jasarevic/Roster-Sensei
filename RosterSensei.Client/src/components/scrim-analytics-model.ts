@@ -55,13 +55,13 @@ export const toRows = (matches: Match[]): MapRow[] =>
                 type: match.type,
                 tournament: match.tournament ?? '',
                 bestOf: match.bestOf ?? null,
-                seriesScore: match.finalScore,
-                seriesOutcome: match.matchOutcome,
+                seriesScore: match.finalScore ?? '',
+                seriesOutcome: match.matchOutcome ?? '',
             };
 
             if (match.maps.length === 0) {
                 return [{
-                    ...base, id: `${match.id}`, mapNumber: null, map: '', result: match.matchOutcome, roundsWon: null, roundsLost: null,
+                    ...base, id: `${match.id}`, mapNumber: null, map: '', result: match.matchOutcome ?? '', roundsWon: null, roundsLost: null,
                     roundDiff: null, firstHalf: '', secondHalf: '', overtime: null,
                 }];
             }

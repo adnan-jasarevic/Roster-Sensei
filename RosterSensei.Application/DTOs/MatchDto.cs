@@ -9,10 +9,10 @@ public class MatchDto
     public DateTime? PlayedDate { get; set; }
     public string Status { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty; // "Official", "Scrim"
-    public string FinalScore { get; set; } = string.Empty;
+    public string? FinalScore { get; set; } // "13 - 9", null until the match is finished
     public int? BestOf { get; set; }
     public List<MatchMapDto> Maps { get; set; } = new List<MatchMapDto>();
-    public string MatchOutcome { get; set; } = string.Empty; // "Win", "Loss" or "Draw"
+    public string? MatchOutcome { get; set; } // "Win", "Loss" or "Draw", null until the match is finished
     public string? Notes { get; set; }
     // Who was in the lineup. Empty when it wasn't recorded.
     public List<MatchLineupEntryDto> Lineup { get; set; } = new List<MatchLineupEntryDto>();

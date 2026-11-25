@@ -19,7 +19,7 @@ public class MatchResponseDto
     public DateTime? PlayedDate { get; set; }
     public string Status { get; set; } = string.Empty; // "Scheduled", "Finished"
 
-    public string FinalScore { get; set; } = string.Empty;
+    public string? FinalScore { get; set; } // "13 - 9", null until the match is finished
 
-    public string MatchOutcome { get; set; } = string.Empty; // "Win", "Loss" or "Draw"
+    public string? MatchOutcome { get; set; } // "Win", "Loss" or "Draw", null until the match is finished
 }

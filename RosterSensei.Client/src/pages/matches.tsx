@@ -10,7 +10,7 @@ import MatchModal from '../components/match-modal';
 import LineupModal from '../components/lineup-modal';
 import MatchDetailsModal from '../components/match-details-modal';
 import { MapChip } from '../components/map-chip';
-import { MatchStatusBadge, NeedsResultBadge, OutcomeBadge } from '../components/domain-badges';
+import { MatchStateBadge } from '../components/domain-badges';
 import PageHeader, { PageContainer } from '../components/page-header';
 import { ListSkeleton } from '../components/page-skeletons';
 import TeamGate from '../components/team-gate';
@@ -117,7 +117,7 @@ function MatchesContent({ team }: { team: Team }) {
                             <MatchRow
                                 key={match.id}
                                 match={match}
-                                overdue={needsResult(match, now)}
+                                now={now}
                                 onShowDetails={() => setDialog({ kind: 'details', matchId: match.id })}
                                 actions={canManageMatches ? {
                                     edit: recordResult => setDialog({ kind: 'editMatch', matchId: match.id, recordResult }),
@@ -180,13 +180,15 @@ interface MatchRowActions {
 
 interface MatchRowProps {
     match: Match;
-    overdue: boolean;
+    /** When the page was opened: decides between Upcoming and Needs result. */
+    now: Date;
     onShowDetails: () => void;
     /** Left out for members who can't change matches. */
     actions?: MatchRowActions;
 }
 
-function MatchRow({ match, overdue, onShowDetails, actions }: MatchRowProps) {
+function MatchRow({ match, now, onShowDetails, actions }: MatchRowProps) {
+    const overdue = needsResult(match, now);
     const isFinished = hasResult(match);
     const lineup = match.lineup ?? [];
     const details = [
@@ -201,7 +203,7 @@ function MatchRow({ match, overdue, onShowDetails, actions }: MatchRowProps) {
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
                     <span className="shrink-0">
-                        {isFinished ? <OutcomeBadge outcome={match.matchOutcome} /> : overdue ? <NeedsResultBadge /> : <MatchStatusBadge status={match.status} />}
+                        <MatchStateBadge match={match} now={now} />
                     </span>
                     <div className="min-w-0">
                         <p className="truncate font-semibold text-fg">vs {match.opponentName}</p>

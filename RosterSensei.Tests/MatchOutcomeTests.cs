@@ -1,11 +1,11 @@
-using RosterSensei.Application.DTOs;
+﻿using RosterSensei.Application.DTOs;
 using RosterSensei.Domain.Entities;
 using RosterSensei.Tests.Infrastructure;
 
 namespace RosterSensei.Tests;
 
 // The dashboard, matches and statistics endpoints all report results as "Win", "Loss" or "Draw",
-// with the score written the same way.
+// with the score written the same way. A match that isn't finished has neither.
 public class MatchOutcomeTests : IDisposable
 {
     private readonly TestDatabase _db = new();
@@ -46,8 +46,80 @@ public class MatchOutcomeTests : IDisposable
     [InlineData(1, 1, MatchOutcome.Draw)]
     public void Outcome_follows_the_series_score(int ours, int theirs, MatchOutcome expected)
     {
-        var match = new Match { OurScore = ours, OpponentScore = theirs };
+        var match = new Match { Status = MatchStatus.Finished, OurScore = ours, OpponentScore = theirs };
         Assert.Equal(expected, match.Outcome);
+    }
+
+    [Theory]
+    [InlineData(MatchStatus.Scheduled)]
+    [InlineData(MatchStatus.Cancelled)]
+    public void A_match_that_isnt_finished_has_no_outcome_or_score(MatchStatus status)
+    {
+        var match = new Match { Status = status, OurScore = 0, OpponentScore = 0 };
+        Assert.False(match.HasResult);
+        Assert.Null(match.Outcome);
+        Assert.Null(match.FinalScore);
+    }
+
+    // Upcoming (still to be played) and "Needs result" (time passed, no score yet) matches both
+    // come back without a result, not as a 0 - 0 draw.
+    [Theory]
+    [InlineData(3)]
+    [InlineData(-3)]
+    public async Task An_unscored_match_has_no_outcome_or_score_on_any_endpoint(int daysFromNow)
+    {
+        await AddMatchAsync(MatchStatus.Scheduled, DateTime.UtcNow.AddDays(daysFromNow));
+
+        var match = Assert.Single((await _db.MatchService().GetTeamMatchesAsync(_owner, _teamId)).Data!);
+        Assert.Equal("Scheduled", match.Status);
+        Assert.Null(match.MatchOutcome);
+        Assert.Null(match.FinalScore);
+
+        var dashboard = (await _db.TeamService().GetTeamDashboardAsync(_teamId, _owner)).Data!;
+        Assert.Empty(dashboard.RecentMatches);
+        Assert.All(dashboard.UpcomingMatches, m =>
+        {
+            Assert.Null(m.MatchOutcome);
+            Assert.Null(m.FinalScore);
+        });
+    }
+
+    // One win plus matches without a score: the win rate is 100%, not dragged down by phantom draws.
+    [Fact]
+    public async Task Unscored_matches_are_not_counted_in_stats_or_win_rate()
+    {
+        await AddFinishedMatchAsync(13, 7);
+        await AddMatchAsync(MatchStatus.Scheduled, DateTime.UtcNow.AddDays(2));   // upcoming
+        await AddMatchAsync(MatchStatus.Scheduled, DateTime.UtcNow.AddDays(-2));  // needs result
+        await AddMatchAsync(MatchStatus.Cancelled, DateTime.UtcNow.AddDays(-4));
+
+        var dashboard = (await _db.TeamService().GetTeamDashboardAsync(_teamId, _owner)).Data!;
+        Assert.Equal(1, dashboard.TotalMatches);
+        Assert.Equal(100, dashboard.WinRatePercentage);
+        Assert.Equal(1, dashboard.UpcomingMatchesCount);
+        Assert.Equal("Win", Assert.Single(dashboard.RecentMatches).MatchOutcome);
+
+        var stats = (await _db.MatchService().GetTeamStatsAsync(_owner, _teamId, null)).Data!;
+        Assert.Equal(1, stats.MatchesPlayed);
+        var point = Assert.Single(stats.Form);
+        Assert.Equal("Win", point.MatchOutcome);
+        Assert.Equal(100, point.WinRatePercentage);
+        Assert.DoesNotContain(stats.Maps, m => m.Draws > 0);
+    }
+
+    private async Task AddMatchAsync(MatchStatus status, DateTime scheduledDate)
+    {
+        var dto = new CreateMatchDto
+        {
+            OpponentName = "Opponent",
+            ScheduledDate = scheduledDate,
+            Status = status,
+            Type = MatchKind.Scrim,
+            BestOf = 1,
+            Maps = [new MatchMapDto { MapName = "Mirage" }]
+        };
+        var result = await _db.MatchService().AddMatchAsync(_owner, _teamId, dto);
+        Assert.True(result.Success, result.ErrorMessage);
     }
 
     private async Task AddFinishedMatchAsync(int ours, int theirs)

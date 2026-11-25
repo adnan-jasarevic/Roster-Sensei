@@ -70,7 +70,7 @@ rules as adding a match (`UpdateMatchDtoValidator` includes `CreateMatchDtoValid
 |---|---|---|
 | Scheduled → Finished | "Add result" on a "Needs result" row, or Edit | Scores, maps, played date; who played and their ratings |
 | Finished → Finished | Edit | Corrections to anything |
-| Finished → Scheduled or Cancelled | Edit | Score back to 0 - 0, played date cleared, ratings and player stats (K, D, A, ADR, HS%) dropped; the lineup stays |
+| Finished → Scheduled or Cancelled | Edit | Score and outcome gone (null in the API), played date cleared, ratings and player stats (K, D, A, ADR, HS%) dropped; the lineup stays |
 | Scheduled ↔ Cancelled | Edit | Status only |
 
 **Two people editing at once:** every match has a `Version`, sent back with an edit. A save from an
@@ -95,10 +95,11 @@ A Scheduled match whose time has passed is "Needs result": it has its own filter
 Matches page, and an "Add result" action. Tests: `MatchEditTests`, `MatchEditApiTests`,
 `e2e/matches.spec.ts`, `e2e/match-editing.spec.ts`.
 
-Known gap, left alone because closing it changes what the API returns:
-
-1. The API sends `matchOutcome: "Draw"` and `finalScore: "0 - 0"` for a match that isn't finished.
-   The client only shows them when `hasResult` is true.
+Only a finished match has a result: for a Scheduled or Cancelled match the API sends
+`matchOutcome: null` and `finalScore: null` (`Match.HasResult`, `Match.Outcome`), so nothing can
+show or count it as a 0 - 0 draw. The Matches list and the match details tag every match the same
+way with `MatchStateBadge`: its outcome, "Needs result", "Upcoming" or "Cancelled". Tests:
+`MatchOutcomeTests`.
 
 ### Calendar event
 

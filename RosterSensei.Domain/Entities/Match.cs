@@ -24,13 +24,20 @@ public class Match
 
     public int? BestOf { get; set; }  // e.g., 3
 
+    // Only a finished match has a result. A scheduled or cancelled one has neither an outcome nor
+    // a score, so it is never reported (or counted) as a 0 - 0 draw.
+    public bool HasResult => Status == MatchStatus.Finished;
+
     // Worked out from the series score, so every endpoint reports results the same way.
-    public MatchOutcome Outcome =>
-        OurScore > OpponentScore ? MatchOutcome.Win
+    // Null until the match is finished.
+    public MatchOutcome? Outcome =>
+        !HasResult ? null
+        : OurScore > OpponentScore ? MatchOutcome.Win
         : OurScore < OpponentScore ? MatchOutcome.Loss
         : MatchOutcome.Draw;
 
-    public string FinalScore => $"{OurScore} - {OpponentScore}";
+    // "13 - 9", or null until the match is finished.
+    public string? FinalScore => HasResult ? $"{OurScore} - {OpponentScore}" : null;
 
     public ICollection<MatchMap> Maps { get; set; } = new List<MatchMap>();
 

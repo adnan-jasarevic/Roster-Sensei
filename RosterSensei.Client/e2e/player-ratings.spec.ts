@@ -107,7 +107,7 @@ test.describe('Entering player ratings', () => {
     });
 
     test('the Lineup dialog has no ratings for a match without a result', async ({ page, api }) => {
-        const scheduled: Match = { ...finishedMatch(8, 'Osaka Oni', 0, 0, '2026-12-20T18:00:00Z'), status: 'Scheduled', maps: [] };
+        const scheduled: Match = { ...finishedMatch(8, 'Osaka Oni', 0, 0, '2026-12-20T18:00:00Z'), status: 'Scheduled', finalScore: null, matchOutcome: null, maps: [] };
         api.teams = [team(1, 'Tokyo Ronin', 'Captain', true, { matches: [scheduled] })];
         await api.install(page);
         await page.goto('/matches');
