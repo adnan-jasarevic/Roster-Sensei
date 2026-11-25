@@ -1,6 +1,7 @@
-using RosterSensei.Application.DTOs;
+﻿using RosterSensei.Application.DTOs;
 using RosterSensei.Application.Interfaces;
 using RosterSensei.Infrastructure.Identity;
+using RosterSensei.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -13,11 +14,13 @@ namespace RosterSensei.Infrastructure.Services;
 public class AuthService : IAuthService
 {
     private readonly UserManager<AppUser> _userManager;
+    private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
 
-    public AuthService(UserManager<AppUser> userManager, IConfiguration configuration)
+    public AuthService(UserManager<AppUser> userManager, AppDbContext db, IConfiguration configuration)
     {
         _userManager = userManager;
+        _db = db;
         _configuration = configuration;
     }
 
@@ -29,7 +32,7 @@ public class AuthService : IAuthService
             Email = dto.Email
         };
 
-        var result = await _userManager.CreateAsync(user, dto.Password);
+        var result = await _userManager.CreateUserAsync(_db, user, dto.Password);
 
         return result.Errors.Select(e => new AuthError(e.Code, e.Description)).ToList();
     }

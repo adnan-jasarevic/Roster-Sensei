@@ -595,12 +595,18 @@ public class MasterTesterService : IMasterTesterService
             if (user == null)
             {
                 user = new AppUser { Email = email, UserName = name, EmailConfirmed = true, SteamId = await UnusedSteamIdAsync() };
-                var created = await _userManager.CreateAsync(user);
-                if (!created.Succeeded)
+                var created = await _userManager.CreateUserAsync(_db, user);
+                if (!created.Succeeded && created.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.DuplicateEmail)))
+                {
+                    // Another request created this player a moment ago.
+                    user = await _userManager.FindByEmailAsync(email);
+                    if (user == null) continue;
+                }
+                else if (!created.Succeeded)
                 {
                     // A real account already has this username.
                     user.UserName = $"{name}_test";
-                    created = await _userManager.CreateAsync(user);
+                    created = await _userManager.CreateUserAsync(_db, user);
                     if (!created.Succeeded) continue;
                 }
             }
