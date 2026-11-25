@@ -61,6 +61,13 @@ public class AppDbContext : IdentityDbContext<AppUser>
             user.Property(u => u.SteamAvatarUrl).HasMaxLength(512).IsUnicode(false);
             // The background refresh looks for linked accounts that are due.
             user.HasIndex(u => u.SteamProfileRefreshDueAt);
+
+            // One account per email, even when two sign-ups with the same email arrive at the same time.
+            // Identity's own check runs before the insert, so on its own it can't stop that race.
+            user.HasIndex(u => u.NormalizedEmail)
+                .HasDatabaseName("EmailIndex")
+                .IsUnique()
+                .HasFilter("[NormalizedEmail] IS NOT NULL");
         });
 
         // Steam sign-ins waiting for the user to come back from Steam. Shared through the database, so a

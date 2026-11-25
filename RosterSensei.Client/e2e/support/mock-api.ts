@@ -373,8 +373,9 @@ export class MockApi {
                 bestOf: body.bestOf,
                 maps,
                 notes: body.notes,
-                finalScore: `${ours} - ${theirs}`,
-                matchOutcome: ours > theirs ? 'Win' : ours < theirs ? 'Loss' : 'Draw',
+                // Like the API: no score or outcome until the match is finished.
+                finalScore: status === 'Finished' ? `${ours} - ${theirs}` : null,
+                matchOutcome: status !== 'Finished' ? null : ours > theirs ? 'Win' : ours < theirs ? 'Loss' : 'Draw',
                 lineup,
                 version: target.version + 1,
             } satisfies Partial<Match>);

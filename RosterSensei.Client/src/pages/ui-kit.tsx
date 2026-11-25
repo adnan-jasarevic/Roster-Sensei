@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Moon, Plus, Settings, Sun, Swords, Trash2, Trophy, Users } from 'lucide-react';
 import { useTheme } from '../theme/theme-context';
 import { Logo } from '../components/brand/logo';
-import { MatchStatusBadge, OutcomeBadge, OwnerBadge, RoleBadge } from '../components/domain-badges';
+import { MatchStatusBadge, NeedsResultBadge, OutcomeBadge, OwnerBadge, RoleBadge, UpcomingBadge } from '../components/domain-badges';
 import { ListSkeleton } from '../components/page-skeletons';
 import {
     Alert,
@@ -146,7 +146,8 @@ export default function UiKit() {
                     <OutcomeBadge outcome="Win" />
                     <OutcomeBadge outcome="Loss" />
                     <OutcomeBadge outcome="Draw" />
-                    <MatchStatusBadge status="Scheduled" />
+                    <UpcomingBadge />
+                    <NeedsResultBadge />
                     <MatchStatusBadge status="Cancelled" />
                     <OwnerBadge />
                     <RoleBadge role="Captain" />

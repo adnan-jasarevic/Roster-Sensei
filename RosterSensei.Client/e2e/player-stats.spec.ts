@@ -134,7 +134,7 @@ test.describe('Entering player stats', () => {
 
     test('the Lineup dialog has no stats for a match without a result', async ({ page, api }) => {
         const t = team(1, 'Tokyo Ronin', 'Captain', true);
-        t.matches = [{ ...finishedMatch(8, 'Osaka Oni', 0, 0, daysAgo(-3)), status: 'Scheduled', maps: [] }];
+        t.matches = [{ ...finishedMatch(8, 'Osaka Oni', 0, 0, daysAgo(-3)), status: 'Scheduled', finalScore: null, matchOutcome: null, maps: [] }];
         api.teams = [t];
         await api.install(page);
         await page.goto('/matches');

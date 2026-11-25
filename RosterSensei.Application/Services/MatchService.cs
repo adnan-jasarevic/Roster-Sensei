@@ -182,7 +182,7 @@ public class MatchService : IMatchService
                 MatchId = match.Id,
                 Date = match.PlayedDate ?? match.ScheduledDate,
                 OpponentName = match.OpponentName,
-                MatchOutcome = match.Outcome.ToString(),
+                MatchOutcome = match.Outcome!.Value.ToString(),
                 WinRatePercentage = Percentage(wins, form.Count + 1)
             });
         }
@@ -328,7 +328,7 @@ public class MatchService : IMatchService
                     OpponentSecondHalf = m.OpponentSecondHalf
                 })
                 .ToList(),
-            MatchOutcome = match.Outcome.ToString(),
+            MatchOutcome = match.Outcome?.ToString(),
             Notes = match.Notes,
             Lineup = ToLineupDto(match.Participations, usernames),
             Version = match.Version

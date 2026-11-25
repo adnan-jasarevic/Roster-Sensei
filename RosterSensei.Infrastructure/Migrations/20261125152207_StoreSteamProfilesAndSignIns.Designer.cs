@@ -12,7 +12,7 @@ using RosterSensei.Infrastructure.Persistence;
 namespace RosterSensei.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261125150754_StoreSteamProfilesAndSignIns")]
+    [Migration("20261125152207_StoreSteamProfilesAndSignIns")]
     partial class StoreSteamProfilesAndSignIns
     {
         /// <inheritdoc />
@@ -649,7 +649,9 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedEmail")
-                        .HasDatabaseName("EmailIndex");
+                        .IsUnique()
+                        .HasDatabaseName("EmailIndex")
+                        .HasFilter("[NormalizedEmail] IS NOT NULL");
 
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()

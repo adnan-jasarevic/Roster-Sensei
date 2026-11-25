@@ -10,8 +10,8 @@ function overdueMatch(): Match {
         ...finishedMatch(5, 'Kyoto Kitsune', 0, 0, daysAgo(2)),
         status: 'Scheduled',
         playedDate: undefined,
-        finalScore: '0 - 0',
-        matchOutcome: 'Draw',
+        finalScore: null,
+        matchOutcome: null,
         bestOf: 3,
         maps: [{ mapName: 'Mirage' }, { mapName: 'Nuke' }, { mapName: 'Inferno' }],
         lineup: [
