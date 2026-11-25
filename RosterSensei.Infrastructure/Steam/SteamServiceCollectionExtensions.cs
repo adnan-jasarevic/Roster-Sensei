@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RosterSensei.Application.Common;
 using RosterSensei.Application.Interfaces;
+using RosterSensei.Infrastructure.Repositories;
 
 namespace RosterSensei.Infrastructure.Steam;
 
@@ -14,7 +15,8 @@ public static class SteamServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
 
         services.AddSingleton(new SteamSignInSettings(allowedOrigins));
-        services.AddSingleton<SteamSignInStates>();
+        // Pending sign-ins live in the database, so they survive restarts and work across API instances.
+        services.AddScoped<ISteamSignInStateStore, SteamSignInStateStore>();
 
         // Short timeouts: a slow Steam must not hold a request (and its DB connection) for long.
         // Response limits: Steam's sign-in replies are tiny; a public profile page is tens of KB.
@@ -31,6 +33,11 @@ public static class SteamServiceCollectionExtensions
 
         services.AddSingleton<ISteamOpenIdVerifier, SteamOpenIdVerifier>();
         services.AddSingleton<ISteamProfileProvider, SteamCommunityProfileProvider>();
+
+        // Names and avatars are stored with the user and refreshed weekly in the background, so rosters
+        // never wait on Steam. The job also deletes expired sign-ins.
+        services.AddScoped<SteamProfileRefresher>();
+        services.AddHostedService<SteamProfileRefreshService>();
         return services;
     }
 }

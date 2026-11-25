@@ -1,7 +1,8 @@
 namespace RosterSensei.Application.Interfaces;
 
-// The user's linked Steam account. SteamId is null when none is linked.
-public sealed record SteamLink(string? SteamId, bool Verified);
+// The user's linked Steam account. SteamId is null when none is linked. PersonaName and AvatarUrl are the
+// stored public Steam name and avatar, null until Steam has answered once.
+public sealed record SteamLink(string? SteamId, bool Verified, string? PersonaName, string? AvatarUrl);
 
 public interface IUserRepository
 {
@@ -17,4 +18,9 @@ public interface IUserRepository
 
     // Rejected when the user doesn't exist.
     Task<WriteOutcome> ClearSteamIdAsync(string userId);
+
+    // Stores the Steam name and avatar (when profile isn't null) and when to look them up next. Only writes
+    // while the user still has steamId linked, so a lookup that finishes after an unlink or relink can't put
+    // the wrong account's name back.
+    Task SaveSteamProfileAsync(string userId, string steamId, SteamProfile? profile, DateTime nextRefreshAt);
 }

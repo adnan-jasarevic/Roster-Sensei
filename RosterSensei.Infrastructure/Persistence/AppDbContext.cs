@@ -19,6 +19,7 @@ public class AppDbContext : IdentityDbContext<AppUser>
     public DbSet<TeamEventType> TeamEventTypes { get; set; }
     public DbSet<TeamOffDay> TeamOffDays { get; set; }
     public DbSet<MapRating> MapRatings { get; set; }
+    public DbSet<SteamSignInState> SteamSignInStates { get; set; }
 
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -55,6 +56,27 @@ public class AppDbContext : IdentityDbContext<AppUser>
                 .HasFilter("[SteamId] IS NOT NULL");
 
             user.Property(u => u.SteamVerified).HasDefaultValue(false);
+
+            user.Property(u => u.SteamPersonaName).HasMaxLength(64);
+            user.Property(u => u.SteamAvatarUrl).HasMaxLength(512).IsUnicode(false);
+            // The background refresh looks for linked accounts that are due.
+            user.HasIndex(u => u.SteamProfileRefreshDueAt);
+        });
+
+        // Steam sign-ins waiting for the user to come back from Steam. Shared through the database, so a
+        // sign-in survives an API restart and can finish on any API instance.
+        builder.Entity<SteamSignInState>(state =>
+        {
+            state.HasKey(s => s.Id);
+            state.Property(s => s.Id).HasMaxLength(64).IsUnicode(false);
+            state.Property(s => s.UserId).HasMaxLength(450);
+            state.Property(s => s.ReturnTo).HasMaxLength(2048);
+            state.HasIndex(s => s.UserId);
+            state.HasIndex(s => s.ExpiresAt);
+            state.HasOne<AppUser>()
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<TeamMember>()

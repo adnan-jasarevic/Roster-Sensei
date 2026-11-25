@@ -3,6 +3,7 @@ using RosterSensei.Application.DTOs;
 using RosterSensei.Application.Interfaces;
 using RosterSensei.Application.Services;
 using RosterSensei.Domain.Enums;
+using RosterSensei.Infrastructure.Repositories;
 using RosterSensei.Tests.Infrastructure;
 
 namespace RosterSensei.Tests;
@@ -98,7 +99,7 @@ public class SteamSignInTests : IDisposable
 
         Assert.False(result.Success);
         Assert.Equal(ErrorType.Validation, result.ErrorType);
-        Assert.Equal(0, _db.SteamStates.PendingCount);
+        Assert.Equal(0, _db.PendingSteamSignIns());
     }
 
     [Fact]
@@ -158,7 +159,7 @@ public class SteamSignInTests : IDisposable
     public async Task A_sign_in_expires_after_ten_minutes()
     {
         var reply = await SignInAtSteamAsync(_alice);
-        _db.Time.Advance(SteamSignInStates.Lifetime + TimeSpan.FromSeconds(1));
+        _db.Time.Advance(SteamSignInStateStore.Lifetime + TimeSpan.FromSeconds(1));
 
         var result = await _db.AccountService().CompleteSteamSignInAsync(_alice, reply);
 
@@ -280,12 +281,12 @@ public class SteamSignInTests : IDisposable
         CompleteSteamSignInDto? latest = null;
         for (var i = 0; i < 20; i++)
             latest = await SignInAtSteamAsync(_alice);
-        Assert.Equal(SteamSignInStates.MaxPendingPerUser, _db.SteamStates.PendingCount);
+        Assert.Equal(SteamSignInStateStore.MaxPendingPerUser, _db.PendingSteamSignIns());
 
         // Expired ones are dropped the next time anyone starts a sign-in.
-        _db.Time.Advance(SteamSignInStates.Lifetime + TimeSpan.FromSeconds(1));
+        _db.Time.Advance(SteamSignInStateStore.Lifetime + TimeSpan.FromSeconds(1));
         var bobs = await SignInAtSteamAsync(_bob);
-        Assert.Equal(1, _db.SteamStates.PendingCount);
+        Assert.Equal(1, _db.PendingSteamSignIns());
 
         Assert.True((await _db.AccountService().CompleteSteamSignInAsync(_bob, bobs)).Success);
         Assert.False((await _db.AccountService().CompleteSteamSignInAsync(_alice, latest!)).Success);

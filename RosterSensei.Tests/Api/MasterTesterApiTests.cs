@@ -74,7 +74,13 @@ public class MasterTesterApiTests : IDisposable
         var members = (await tester.GetFromJsonAsync<List<TeamMemberDto>>($"/api/Teams/{teamId}/members"))!;
         Assert.Equal(7, members.Count);
         Assert.Single(members, m => m.Role == "Officer");
-        Assert.All(members.Where(m => !m.IsOwner), m => Assert.NotNull(m.SteamId));
+        // Made-up players: most signed in through Steam, a few only pasted a link, all with a Steam name
+        // next to their own display name.
+        var seeded = members.Where(m => !m.IsOwner).ToList();
+        Assert.All(seeded, m => Assert.NotNull(m.SteamId));
+        Assert.All(seeded, m => Assert.False(string.IsNullOrEmpty(m.SteamPersonaName)));
+        Assert.Contains(seeded, m => !m.SteamVerified);
+        Assert.True(seeded.Count(m => m.SteamVerified) > seeded.Count / 2);
 
         var matches = (await tester.GetFromJsonAsync<List<MatchDto>>($"/api/Matches/{teamId}"))!;
         Assert.Equal(14, matches.Count(m => m.Status == "Finished"));
