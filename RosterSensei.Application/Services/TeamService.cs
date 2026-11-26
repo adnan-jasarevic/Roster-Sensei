@@ -13,13 +13,11 @@ public class TeamService : ITeamService
 
     private readonly ITeamRepository _teamRepository;
     private readonly IIdentityService _identityService;
-    private readonly ISteamProfileProvider _steamProfiles;
 
-    public TeamService(ITeamRepository teamRepository, IIdentityService identityService, ISteamProfileProvider steamProfiles)
+    public TeamService(ITeamRepository teamRepository, IIdentityService identityService)
     {
         _teamRepository = teamRepository;
         _identityService = identityService;
-        _steamProfiles = steamProfiles;
     }
 
     public async Task<Result<TeamDto>> CreateTeamAsync(string userId, CreateTeamDto dto)
@@ -243,12 +241,6 @@ public class TeamService : ITeamService
         var team = await _teamRepository.GetByIdAsync(teamId, cancellationToken);
         var membersData = await _teamRepository.GetTeamMembersWithUserDetailsAsync(teamId, cancellationToken);
 
-        // Cached Steam lookups for the whole roster; empty when Steam is down.
-        var steamIds = membersData.Where(m => m.SteamId != null).Select(m => m.SteamId!).Distinct().ToList();
-        var profiles = steamIds.Count == 0
-            ? new Dictionary<string, SteamProfile>()
-            : await _steamProfiles.GetProfilesAsync(steamIds, cancellationToken);
-
         var dtoList = membersData.Select(data => new TeamMemberDto
         {
             Id = data.Member.UserId,
@@ -260,8 +252,9 @@ public class TeamService : ITeamService
             SteamId = data.SteamId,
             SteamProfileUrl = data.SteamId == null ? null : SteamId.ProfileUrl(data.SteamId),
             SteamVerified = data.SteamId != null && data.SteamVerified,
-            SteamPersonaName = data.SteamId != null && profiles.TryGetValue(data.SteamId, out var profile) ? profile.PersonaName : null,
-            SteamAvatarUrl = data.SteamId != null && profiles.TryGetValue(data.SteamId, out var avatar) ? avatar.AvatarUrl : null
+            // Stored Steam name and avatar, kept fresh by the weekly background refresh: a roster never waits on Steam.
+            SteamPersonaName = data.SteamId == null ? null : data.SteamPersonaName,
+            SteamAvatarUrl = data.SteamId == null ? null : data.SteamAvatarUrl
         }).ToList();
 
         return Result<List<TeamMemberDto>>.SuccessResult(dtoList);

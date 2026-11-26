@@ -23,9 +23,16 @@ public sealed class FakeSteamProfiles : ISteamProfileProvider
 {
     public Dictionary<string, SteamProfile> Profiles { get; } = new();
 
+    // Every Steam ID asked for, in order.
+    public List<string> Requested { get; } = new();
+
     public Task<IReadOnlyDictionary<string, SteamProfile>> GetProfilesAsync(IReadOnlyCollection<string> steamIds, CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyDictionary<string, SteamProfile>>(
+    {
+        lock (Requested)
+            Requested.AddRange(steamIds);
+        return Task.FromResult<IReadOnlyDictionary<string, SteamProfile>>(
             Profiles.Where(p => steamIds.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value));
+    }
 }
 
 public sealed class FakeTime : TimeProvider

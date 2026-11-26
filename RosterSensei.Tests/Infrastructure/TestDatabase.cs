@@ -5,6 +5,7 @@ using RosterSensei.Domain.Enums;
 using RosterSensei.Infrastructure.Identity;
 using RosterSensei.Infrastructure.Persistence;
 using RosterSensei.Infrastructure.Repositories;
+using RosterSensei.Infrastructure.Steam;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -32,7 +33,7 @@ public sealed class TestDatabase : IDisposable
     public TeamService TeamService()
     {
         var context = CreateContext();
-        return new TeamService(new TeamRepository(context), new FakeIdentityService(context), SteamProfiles);
+        return new TeamService(new TeamRepository(context), new FakeIdentityService(context));
     }
 
     // Steam stand-ins shared by every service this database hands out.
@@ -41,8 +42,20 @@ public sealed class TestDatabase : IDisposable
     public FakeTime Time { get; } = new();
     public const string FrontendOrigin = "http://localhost:5173";
 
-    private RosterSensei.Application.Common.SteamSignInStates? _steamStates;
-    public RosterSensei.Application.Common.SteamSignInStates SteamStates => _steamStates ??= new(Time);
+    public SteamSignInStateStore SteamStates() => new(CreateContext(), Time);
+
+    public int PendingSteamSignIns()
+    {
+        using var context = CreateContext();
+        return context.SteamSignInStates.Count();
+    }
+
+    public SteamProfileRefresher SteamProfileRefresher()
+    {
+        var context = CreateContext();
+        return new SteamProfileRefresher(context, SteamProfiles, new UserRepository(context), new SteamSignInStateStore(context, Time), Time,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<SteamProfileRefresher>.Instance);
+    }
 
     public MatchService MatchService()
     {
@@ -85,8 +98,9 @@ public sealed class TestDatabase : IDisposable
         new UserRepository(CreateContext()),
         SteamOpenId,
         SteamProfiles,
-        SteamStates,
-        new RosterSensei.Application.Common.SteamSignInSettings([FrontendOrigin]));
+        SteamStates(),
+        new RosterSensei.Application.Common.SteamSignInSettings([FrontendOrigin]),
+        Time);
 
     public string AddUser(string name)
     {

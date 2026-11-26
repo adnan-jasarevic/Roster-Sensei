@@ -614,10 +614,22 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SteamAvatarUrl")
+                        .HasMaxLength(512)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(512)");
+
                     b.Property<string>("SteamId")
                         .HasMaxLength(17)
                         .IsUnicode(false)
                         .HasColumnType("varchar(17)");
+
+                    b.Property<string>("SteamPersonaName")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("SteamProfileRefreshDueAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool>("SteamVerified")
                         .ValueGeneratedOnAdd()
@@ -647,7 +659,38 @@ namespace RosterSensei.Infrastructure.Migrations
                         .IsUnique()
                         .HasFilter("[SteamId] IS NOT NULL");
 
+                    b.HasIndex("SteamProfileRefreshDueAt");
+
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("RosterSensei.Infrastructure.Persistence.SteamSignInState", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReturnTo")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SteamSignInStates");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -826,6 +869,15 @@ namespace RosterSensei.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("RosterSensei.Infrastructure.Persistence.SteamSignInState", b =>
+                {
+                    b.HasOne("RosterSensei.Infrastructure.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("RosterSensei.Domain.Entities.Match", b =>

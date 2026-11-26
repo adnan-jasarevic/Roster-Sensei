@@ -74,7 +74,9 @@ dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<your connection 
 
 The API only accepts browser requests from origins listed under `Cors:AllowedOrigins`. In Development that's `http://localhost:5173`, the Vite dev server (see `appsettings.Development.json`). Steam sign-in only returns users to these origins too, so add your production frontend there.
 
-Steam names and avatars on the roster come from public Steam Community profiles, so no Steam Web API key is needed. Lookups are cached for an hour; if Steam is down or rate-limits the API, the roster just shows "Steam" instead of names and avatars until it recovers.
+Steam names and avatars on the roster come from public Steam Community profiles, so no Steam Web API key is needed. They're stored with each user: looked up right after a Steam sign-in, then refreshed once a week by a background job in the API (it checks every 15 minutes for accounts that are due). Rosters never wait on Steam. If Steam is down or rate-limits the API, the old name and avatar stay and the job tries that account again a day later. A player's display name is always the one they set; the Steam name is shown next to it on the roster.
+
+Steam sign-ins in progress are stored in the database (table `SteamSignInStates`, 10 minutes each, expired ones deleted automatically), so a sign-in survives an API restart and works with more than one API instance.
 
 ### 2. Create the database
 

@@ -35,6 +35,18 @@ public class MasterTesterService : IMasterTesterService
         ("quill", "AWPer"), ("mako", "Entry"), ("onyx", "Lurker"), ("pixel", "Rifler"),
     ];
 
+    // Made-up Steam names, shown next to each player's own display name on the roster.
+    private static readonly Dictionary<string, string> SeedSteamNames = new()
+    {
+        ["kaiser"] = "Kaiser_IGL", ["nyx"] = "nyx", ["sable"] = "sable-", ["rook"] = "rookie_rook",
+        ["volt"] = "VOLT", ["ember"] = "embr", ["drift"] = "driftking", ["hollow"] = "hollow.",
+        ["quill"] = "quillz", ["mako"] = "mako shark", ["onyx"] = "0nyx", ["pixel"] = "pix",
+    };
+
+    // Most made-up players signed in through Steam (verified); these few only pasted a Steam link, so the
+    // roster also shows what an Unverified one looks like. sable is in the first roster batch.
+    private static readonly HashSet<string> UnverifiedSeedPlayers = ["sable", "hollow", "onyx"];
+
     private static readonly string[] Opponents =
     [
         "Northwind Five", "Ashfall", "Kestrel Esports", "Red Lantern", "Glass Cannon", "Ironbark",
@@ -591,10 +603,22 @@ public class MasterTesterService : IMasterTesterService
         foreach (var (name, _) in SeedPlayers)
         {
             var email = SeedEmail(name);
+            var verified = !UnverifiedSeedPlayers.Contains(name);
+            var steamName = SeedSteamNames[name];
             var user = await _userManager.FindByEmailAsync(email);
             if (user == null)
             {
-                user = new AppUser { Email = email, UserName = name, EmailConfirmed = true, SteamId = await UnusedSteamIdAsync() };
+                user = new AppUser
+                {
+                    Email = email,
+                    UserName = name,
+                    EmailConfirmed = true,
+                    SteamId = await UnusedSteamIdAsync(),
+                    SteamVerified = verified,
+                    SteamPersonaName = steamName,
+                    // Fake IDs may belong to real strangers, so the Steam refresh must never look them up.
+                    SteamProfileRefreshDueAt = SteamProfileRefresh.Never
+                };
                 var created = await _userManager.CreateUserAsync(_db, user);
                 if (!created.Succeeded && created.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.DuplicateEmail)))
                 {
@@ -609,6 +633,18 @@ public class MasterTesterService : IMasterTesterService
                     created = await _userManager.CreateUserAsync(_db, user);
                     if (!created.Succeeded) continue;
                 }
+            }
+            else if (user.SteamVerified != verified || user.SteamPersonaName != steamName
+                || user.SteamProfileRefreshDueAt != SteamProfileRefresh.Never || user.SteamId == null)
+            {
+                // Made-up players from before Steam names were stored: bring them up to date.
+                var steamId = user.SteamId ?? await UnusedSteamIdAsync();
+                await _db.Users.Where(u => u.Id == user.Id).ExecuteUpdateAsync(s => s
+                    .SetProperty(u => u.SteamId, steamId)
+                    .SetProperty(u => u.SteamVerified, verified)
+                    .SetProperty(u => u.SteamPersonaName, steamName)
+                    .SetProperty(u => u.SteamAvatarUrl, (string?)null)
+                    .SetProperty(u => u.SteamProfileRefreshDueAt, SteamProfileRefresh.Never));
             }
             users.Add(user);
         }

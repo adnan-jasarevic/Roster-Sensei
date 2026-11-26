@@ -15,21 +15,24 @@ public class AccountService : IAccountService
     private readonly IUserRepository _userRepository;
     private readonly ISteamOpenIdVerifier _openId;
     private readonly ISteamProfileProvider _profiles;
-    private readonly SteamSignInStates _states;
+    private readonly ISteamSignInStateStore _states;
     private readonly SteamSignInSettings _settings;
+    private readonly TimeProvider _time;
 
     public AccountService(
         IUserRepository userRepository,
         ISteamOpenIdVerifier openId,
         ISteamProfileProvider profiles,
-        SteamSignInStates states,
-        SteamSignInSettings settings)
+        ISteamSignInStateStore states,
+        SteamSignInSettings settings,
+        TimeProvider time)
     {
         _userRepository = userRepository;
         _openId = openId;
         _profiles = profiles;
         _states = states;
         _settings = settings;
+        _time = time;
     }
 
     public async Task<Result<SteamAccountDto>> GetSteamAccountAsync(string userId, CancellationToken cancellationToken = default)
@@ -38,17 +41,8 @@ public class AccountService : IAccountService
         if (link == null)
             return Result<SteamAccountDto>.NotFound("User not found.");
 
-        var dto = ToDto(link.SteamId, link.Verified);
-        if (link.SteamId != null)
-        {
-            var profiles = await _profiles.GetProfilesAsync([link.SteamId], cancellationToken);
-            if (profiles.TryGetValue(link.SteamId, out var profile))
-            {
-                dto.PersonaName = profile.PersonaName;
-                dto.AvatarUrl = profile.AvatarUrl;
-            }
-        }
-        return Result<SteamAccountDto>.SuccessResult(dto);
+        // The stored name and avatar: this page never waits on Steam.
+        return Result<SteamAccountDto>.SuccessResult(ToDto(link));
     }
 
     public async Task<Result<SteamSignInStartedDto>> StartSteamSignInAsync(string userId, StartSteamSignInDto dto)
@@ -68,13 +62,13 @@ public class AccountService : IAccountService
             return Result<SteamSignInStartedDto>.NotFound("User not found.");
 
         var baseUrl = returnUrl.GetLeftPart(UriPartial.Path);
-        var state = _states.Issue(userId, s => $"{baseUrl}?{StateParameter}={s}", out var returnTo);
-        if (state == null)
+        var issued = await _states.IssueAsync(userId, s => $"{baseUrl}?{StateParameter}={s}");
+        if (issued == null)
             return Result<SteamSignInStartedDto>.Failure("Too many Steam sign-ins are in progress. Try again in a few minutes.");
 
         return Result<SteamSignInStartedDto>.SuccessResult(new SteamSignInStartedDto
         {
-            RedirectUrl = _openId.BuildSignInUrl(returnTo, origin)
+            RedirectUrl = _openId.BuildSignInUrl(issued.ReturnTo, origin)
         });
     }
 
@@ -94,7 +88,7 @@ public class AccountService : IAccountService
 
         var state = ReadState(returnUri.Query);
         // Consumed before talking to Steam, so two requests with the same reply can't both get through.
-        if (state == null || !_states.TryConsume(state, userId, returnTo))
+        if (state == null || !await _states.TryConsumeAsync(state, userId, returnTo))
             return Result<SteamAccountDto>.Failure(Expired);
 
         var steamId = await _openId.VerifyAsync(parameters, cancellationToken);
@@ -107,7 +101,12 @@ public class AccountService : IAccountService
         if (outcome != WriteOutcome.Done)
             return Result<SteamAccountDto>.NotFound("User not found.");
 
-        // A fresh link: the name and avatar are worth one lookup, but the link itself is already saved.
+        // A fresh link: the name and avatar are worth one lookup now, so the user sees them straight away.
+        // The link itself is already saved; if Steam doesn't answer, the background refresh fills them in soon.
+        var profiles = await _profiles.GetProfilesAsync([steamId], CancellationToken.None);
+        if (profiles.TryGetValue(steamId, out var profile))
+            await _userRepository.SaveSteamProfileAsync(userId, steamId, profile, _time.GetUtcNow().UtcDateTime + SteamProfileRefresh.Interval);
+
         return await GetSteamAccountAsync(userId, CancellationToken.None);
     }
 
@@ -130,10 +129,12 @@ public class AccountService : IAccountService
         return null;
     }
 
-    private static SteamAccountDto ToDto(string? steamId, bool verified) => new()
+    private static SteamAccountDto ToDto(SteamLink link) => new()
     {
-        SteamId = steamId,
-        ProfileUrl = steamId == null ? null : SteamId.ProfileUrl(steamId),
-        Verified = steamId != null && verified
+        SteamId = link.SteamId,
+        ProfileUrl = link.SteamId == null ? null : SteamId.ProfileUrl(link.SteamId),
+        Verified = link.SteamId != null && link.Verified,
+        PersonaName = link.SteamId == null ? null : link.PersonaName,
+        AvatarUrl = link.SteamId == null ? null : link.AvatarUrl
     };
 }

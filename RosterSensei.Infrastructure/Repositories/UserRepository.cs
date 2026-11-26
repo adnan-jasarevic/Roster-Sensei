@@ -23,7 +23,7 @@ public class UserRepository : IUserRepository
     {
         return await _context.Users
             .Where(u => u.Id == userId)
-            .Select(u => new SteamLink(u.SteamId, u.SteamVerified))
+            .Select(u => new SteamLink(u.SteamId, u.SteamVerified, u.SteamPersonaName, u.SteamAvatarUrl))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -37,11 +37,20 @@ public class UserRepository : IUserRepository
         {
             await _context.Users
                 .Where(u => u.SteamId == steamId && u.Id != userId && !u.SteamVerified)
-                .ExecuteUpdateAsync(s => s.SetProperty(u => u.SteamId, (string?)null));
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(u => u.SteamId, (string?)null)
+                    .SetProperty(u => u.SteamPersonaName, (string?)null)
+                    .SetProperty(u => u.SteamAvatarUrl, (string?)null)
+                    .SetProperty(u => u.SteamProfileRefreshDueAt, (DateTime?)null));
 
+            // A different account than before loses the old name and avatar; the same one keeps them.
+            // Either way the background refresh picks it up soon, in case the lookup after sign-in fails.
             var updated = await _context.Users
                 .Where(u => u.Id == userId)
                 .ExecuteUpdateAsync(s => s
+                    .SetProperty(u => u.SteamPersonaName, u => u.SteamId == steamId ? u.SteamPersonaName : null)
+                    .SetProperty(u => u.SteamAvatarUrl, u => u.SteamId == steamId ? u.SteamAvatarUrl : null)
+                    .SetProperty(u => u.SteamProfileRefreshDueAt, (DateTime?)null)
                     .SetProperty(u => u.SteamId, steamId)
                     .SetProperty(u => u.SteamVerified, true));
 
@@ -64,8 +73,26 @@ public class UserRepository : IUserRepository
             .Where(u => u.Id == userId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(u => u.SteamId, (string?)null)
-                .SetProperty(u => u.SteamVerified, false));
+                .SetProperty(u => u.SteamVerified, false)
+                .SetProperty(u => u.SteamPersonaName, (string?)null)
+                .SetProperty(u => u.SteamAvatarUrl, (string?)null)
+                .SetProperty(u => u.SteamProfileRefreshDueAt, (DateTime?)null));
 
         return updated == 1 ? WriteOutcome.Done : WriteOutcome.Rejected;
+    }
+
+    public async Task SaveSteamProfileAsync(string userId, string steamId, SteamProfile? profile, DateTime nextRefreshAt)
+    {
+        var query = _context.Users.Where(u => u.Id == userId && u.SteamId == steamId);
+        if (profile == null)
+        {
+            await query.ExecuteUpdateAsync(s => s.SetProperty(u => u.SteamProfileRefreshDueAt, nextRefreshAt));
+            return;
+        }
+
+        await query.ExecuteUpdateAsync(s => s
+            .SetProperty(u => u.SteamPersonaName, profile.PersonaName)
+            .SetProperty(u => u.SteamAvatarUrl, profile.AvatarUrl)
+            .SetProperty(u => u.SteamProfileRefreshDueAt, nextRefreshAt));
     }
 }

@@ -49,6 +49,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<DbContextOptions<AppDbContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
             services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connectionString));
+            // No background Steam refresh while a test runs; SteamProfileRefreshTests runs it by hand.
+            foreach (var job in services.Where(d => d.ImplementationType == typeof(RosterSensei.Infrastructure.Steam.SteamProfileRefreshService)).ToList())
+                services.Remove(job);
             _configureServices?.Invoke(services);
         });
     }

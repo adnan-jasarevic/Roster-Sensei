@@ -16,7 +16,7 @@ public class TeamMemberDto
     // True when the member proved the Steam account is theirs by signing in through Steam.
     public bool SteamVerified { get; set; }
 
-    // Public Steam name and avatar, when Steam answered (it can be rate-limited or down). Otherwise null.
+    // Stored public Steam name and avatar, refreshed weekly. Null until Steam has answered once.
     public string? SteamPersonaName { get; set; }
     public string? SteamAvatarUrl { get; set; }
 }
