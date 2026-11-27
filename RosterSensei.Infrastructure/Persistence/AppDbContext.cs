@@ -13,6 +13,9 @@ public class AppDbContext : IdentityDbContext<AppUser>
     public DbSet<Team> Teams { get; set; }
     public DbSet<Match> Matches { get; set; }
     public DbSet<MatchMap> MatchMaps { get; set; }
+    public DbSet<MatchCoach> MatchCoaches { get; set; }
+    public DbSet<MatchDemoImport> MatchDemoImports { get; set; }
+    public DbSet<DemoParserStatus> DemoParserStatuses { get; set; }
     public DbSet<TeamMember> TeamMembers { get; set; }
     public DbSet<TeamInvite> TeamInvites { get; set; }
     public DbSet<TeamEvent> TeamEvents { get; set; }
@@ -274,6 +277,68 @@ public class AppDbContext : IdentityDbContext<AppUser>
 
             map.HasIndex(mm => new { mm.MatchId, mm.Order })
                 .IsUnique();
+        });
+
+        builder.Entity<MatchCoach>(coach =>
+        {
+            coach.HasOne(c => c.Match)
+                .WithMany(m => m.Coaches)
+                .HasForeignKey(c => c.MatchId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            coach.Property(c => c.UserId).HasMaxLength(450);
+            coach.Property(c => c.Name).HasMaxLength(MatchCoachLimits.MaxNameLength);
+            coach.Property(c => c.SteamId).HasMaxLength(20);
+
+            // Not a foreign key: a coach who deletes their account stays in the match's history by name.
+            coach.HasIndex(c => new { c.MatchId, c.UserId })
+                .IsUnique()
+                .HasFilter("[UserId] IS NOT NULL");
+            coach.HasIndex(c => new { c.MatchId, c.SteamId })
+                .IsUnique()
+                .HasFilter("[SteamId] IS NOT NULL");
+        });
+
+        builder.Entity<MatchDemoImport>(import =>
+        {
+            import.HasOne(i => i.Match)
+                .WithMany(m => m.DemoImports)
+                .HasForeignKey(i => i.MatchId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            import.Property(i => i.MapName).IsRequired().HasMaxLength(50);
+            import.Property(i => i.Fingerprint).IsRequired().HasMaxLength(64);
+            import.Property(i => i.ParserVersion).IsRequired().HasMaxLength(50);
+            import.Property(i => i.ImportedByUserId).IsRequired().HasMaxLength(450);
+
+            // One demo per map of a match.
+            import.HasIndex(i => new { i.MatchId, i.MapOrder })
+                .IsUnique();
+            // The same demo can't be imported twice by one team, even by two people at once.
+            import.HasIndex(i => new { i.TeamId, i.Fingerprint })
+                .IsUnique();
+            // For the update guard's "newest patch imported so far".
+            import.HasIndex(i => i.PatchVersion);
+        });
+
+        builder.Entity<DemoPlayerStats>(stats =>
+        {
+            stats.HasOne(s => s.MatchDemoImport)
+                .WithMany(i => i.Players)
+                .HasForeignKey(s => s.MatchDemoImportId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            stats.Property(s => s.UserId).IsRequired().HasMaxLength(450);
+            stats.Property(s => s.SteamId).IsRequired().HasMaxLength(20);
+
+            stats.HasIndex(s => new { s.MatchDemoImportId, s.UserId })
+                .IsUnique();
+        });
+
+        builder.Entity<DemoParserStatus>(status =>
+        {
+            status.HasKey(s => s.ParserVersion);
+            status.Property(s => s.ParserVersion).HasMaxLength(50);
         });
 
         builder.Entity<Team>(team =>

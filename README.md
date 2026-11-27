@@ -17,6 +17,8 @@ A web app for amateur Counter-Strike 2 teams to manage their roster, schedule ma
 - **Lineups:** the Owner, Captain, Officers and Coaches record who played each match from the Lineup dialog on the Matches page, with an optional free-text role and whether they played or sat on the bench. The match list shows each lineup.
 - **Player ratings:** when adding a finished match, tick who played and optionally give each a rating from 0.01 to 99.99 (a comma works as the decimal point). Ratings can be added or corrected later in a match's lineup, only for players who played in a finished match.
 - **Player stats per match:** the Lineup dialog of a finished match also takes each player's kills, deaths, assists, ADR and HS% for the whole match. Every value is optional.
+- **Demo import:** a manager can import one map's CS2 demo (.dem, or a .gz, .bz2 or .zip holding one, up to 1 GB) into an existing match. The demo is read in the browser and never uploaded; only its scoreboard is sent. The map score and halves, each linked player's kills, deaths, assists, ADR and HS%, and the coaches are saved after a preview. Players are matched to the roster by their linked Steam account and can be linked or left out by hand. A series adds up the stats of its imported maps, and the same demo can only be imported once per team. Stats typed in by hand are replaced; ratings stay.
+- **Coaches per match:** a match records which coaches were there, team members or people from outside the team, filled in from a demo or by hand.
 - **Match details:** every member can open a match's details from the Matches page: result, maps, notes, and a scoreboard of the players who played (K, D, A, +/-, K/D, ADR, HS%, rating) with the team's totals.
 - **Player statistics:** a section of the Statistics tab with each player's matches played, win rate, K/D, average ADR and HS%, and their rating average, form (last 5 rated matches), best and worst. Filters: match type (the tab's switch), period, map and a minimum number of matches played. Columns sort; a player without a value goes last.
 - **Calendar:** plan praccs, official matches, VOD reviews and more in month, week, day and agenda views.
@@ -137,10 +139,21 @@ npm run test:e2e
 
 They cover logging in, modal and menu focus, switching teams, loading, empty and error states, what each role can do, the Add Match request, and accessibility scans in both themes.
 
-GitHub Actions runs on every pull request and on every push to `master`: it builds the API and runs the tests, then lints and builds the frontend and runs its browser tests.
+GitHub Actions runs on every pull request and on every push to `master`: it builds the API and runs the tests, rebuilds the demo reader and checks it matches the committed file, then lints and builds the frontend and runs its browser tests.
+
+### Demo reader
+
+Demos are read in the browser by `RosterSensei.DemoReader`, a small Go program built on [demoinfocs-golang](https://github.com/markus-wa/demoinfocs-golang) and compiled to WebAssembly. It reads the file piece by piece in a Web Worker, so even a big demo uses little memory. The build lives in `RosterSensei.Client/public/demo-reader`; after changing the Go code or updating demoinfocs-golang, rebuild it (needs the Go version in `go.mod`) and bump `DEMO_PARSER_VERSION` in `src/lib/demo-reader.ts`:
+
+```bash
+./RosterSensei.DemoReader/build.sh
+cd RosterSensei.DemoReader && go run ./cmd/native path/to/demo.dem   # prints what a demo holds
+```
+
+When a demo from a newer CS2 patch than any imported so far can't be read, the API pauses demo import for that reader version, since a game update has most likely changed the demo format. A release with a new `DEMO_PARSER_VERSION` starts unpaused. Stats can still be typed in by hand meanwhile.
 
 ## Roadmap
 
 Planned features:
 
-- [Player stats per match](https://github.com/adnan-jasarevic/Roster-Sensei/issues/19): importing stats from demo files or a stats service instead of typing them in
+- Keeping the last 10 imported demos so they can be downloaded again, once hosting is decided

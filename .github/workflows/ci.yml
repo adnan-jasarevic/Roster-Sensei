@@ -30,6 +30,29 @@ jobs:
       - name: Run tests
         run: dotnet test RosterSensei.Tests/RosterSensei.Tests.csproj --configuration Release --logger "console;verbosity=normal"
 
+  demo-reader:
+    name: Demo reader build check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: RosterSensei.DemoReader
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: RosterSensei.DemoReader/go.mod
+          cache-dependency-path: RosterSensei.DemoReader/go.sum
+
+      - run: go vet ./reader ./cmd/native
+
+      # The browser loads the committed build from the client's public folder. Rebuilding must give
+      # the same bytes, so the committed file always matches this source.
+      - name: Rebuild and compare with the committed file
+        run: |
+          ./build.sh
+          git diff --exit-code -- ../RosterSensei.Client/public/demo-reader
+
   frontend:
     name: Frontend lint, build and tests
     runs-on: ubuntu-latest

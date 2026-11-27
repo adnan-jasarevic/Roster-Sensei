@@ -57,6 +57,19 @@ public sealed class TestDatabase : IDisposable
             Microsoft.Extensions.Logging.Abstractions.NullLogger<SteamProfileRefresher>.Instance);
     }
 
+    public DemoImportService DemoImportService()
+    {
+        var context = CreateContext();
+        return new DemoImportService(new MatchRepository(context), new TeamRepository(context), new DemoImportRepository(context), new FakeIdentityService(context), Time);
+    }
+
+    public void SetSteamId(string userId, string steamId)
+    {
+        using var context = CreateContext();
+        context.Users.Single(u => u.Id == userId).SteamId = steamId;
+        context.SaveChanges();
+    }
+
     public MatchService MatchService()
     {
         var context = CreateContext();
@@ -176,6 +189,14 @@ public sealed class TestDatabase : IDisposable
             return Task.FromResult(_context.Users
                 .Where(u => ids.Contains(u.Id))
                 .ToDictionary(u => u.Id, u => u.UserName ?? string.Empty));
+        }
+
+        public Task<Dictionary<string, string>> GetUserIdsBySteamIdsAsync(IEnumerable<string> steamIds)
+        {
+            var ids = steamIds.ToList();
+            return Task.FromResult(_context.Users
+                .Where(u => u.SteamId != null && ids.Contains(u.SteamId))
+                .ToDictionary(u => u.SteamId!, u => u.Id));
         }
     }
 }

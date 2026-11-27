@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UsersRound } from 'lucide-react';
+import { FileUp, UsersRound } from 'lucide-react';
 import { cx } from '../lib/cx';
 import { formatDateTime } from '../lib/format';
 import { formatPlayerRating } from '../lib/player-ratings';
@@ -21,6 +21,8 @@ interface MatchDetailsModalProps {
     onClose: () => void;
     /** Opens the Lineup dialog. Left out for members who can't edit it. */
     onEditLineup?: () => void;
+    /** Opens the demo import. Left out for members who can't edit the match, and for a cancelled one. */
+    onImportDemo?: () => void;
 }
 
 const DASH = '–';
@@ -40,7 +42,7 @@ const COLUMNS: { label: string; title: string }[] = [
 const cell = 'border-b border-line px-3 py-2 text-right tabular-nums';
 
 /** One match: result, maps and scoreboard. */
-export default function MatchDetailsModal({ match, onClose, onEditLineup }: MatchDetailsModalProps) {
+export default function MatchDetailsModal({ match, onClose, onEditLineup, onImportDemo }: MatchDetailsModalProps) {
     const isFinished = hasResult(match);
     // Decides between the Upcoming and Needs result tags.
     const [now] = useState(() => new Date());
@@ -65,6 +67,11 @@ export default function MatchDetailsModal({ match, onClose, onEditLineup }: Matc
             size="lg"
             footer={
                 <>
+                    {onImportDemo && (
+                        <Button variant="secondary" onClick={onImportDemo} leftIcon={<FileUp className="size-4" aria-hidden="true" />}>
+                            Import demo
+                        </Button>
+                    )}
                     {onEditLineup && (
                         <Button variant="secondary" onClick={onEditLineup} leftIcon={<UsersRound className="size-4" aria-hidden="true" />}>
                             {match.lineup.length > 0 ? 'Edit lineup' : 'Set lineup'}
@@ -135,12 +142,23 @@ export default function MatchDetailsModal({ match, onClose, onEditLineup }: Matc
                             </p>
                         </>
                     )}
+                    {(match.importedMapOrders?.length ?? 0) > 0 && (
+                        <p className="text-xs text-fg-subtle">
+                            Stats of {match.importedMapOrders!.length === 1 ? `map ${match.importedMapOrders![0]}` : `maps ${match.importedMapOrders!.join(', ')}`} come from a demo.
+                        </p>
+                    )}
                     {substitutes.length > 0 && (
                         <p className="text-sm text-fg-muted">
                             <span className="font-medium text-fg">Substitutes:</span> {substitutes.map(s => s.username + (s.role ? ` (${s.role})` : '')).join(', ')}
                         </p>
                     )}
                 </section>
+
+                {(match.coaches?.length ?? 0) > 0 && (
+                    <p className="text-sm text-fg-muted">
+                        <span className="font-medium text-fg">{match.coaches!.length === 1 ? 'Coach' : 'Coaches'}:</span> {match.coaches!.map(c => c.displayName).join(', ')}
+                    </p>
+                )}
 
                 {match.notes && (
                     <section aria-labelledby={`notes-${match.id}`} className="flex flex-col gap-1">

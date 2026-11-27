@@ -64,7 +64,89 @@ export interface Match {
     notes?: string;
     /** Who was in the lineup, players who played first. Empty when it wasn't recorded. */
     lineup: LineupEntry[];
+    /** Who coached. Empty when nobody did, or it wasn't recorded. */
+    coaches?: MatchCoachEntry[];
+    /** Orders (1, 2, ...) of the maps whose stats came from a demo. */
+    importedMapOrders?: number[];
     /** Sent back with an edit, so a save over someone else's newer changes is refused (409). */
+    version: number;
+}
+
+/** A coach of a match: a team member (userId) or someone from outside the team. */
+export interface MatchCoachEntry {
+    userId: string | null;
+    /** The member's username, or the name entered for a coach from outside the team. */
+    displayName: string;
+    steamId: string | null;
+}
+
+/** A coach sent with a match or a demo import. */
+export interface MatchCoachRequest {
+    userId?: string;
+    name?: string;
+    steamId?: string;
+}
+
+/** What the browser read from one map's demo: the game's own end-of-match scoreboard. */
+export interface DemoSummary {
+    parserVersion: string;
+    patchVersion: number | null;
+    /** SHA-256 of the unpacked demo, lowercase hex. */
+    fingerprint: string;
+    /** As the demo names it, e.g. "de_mirage". */
+    mapName: string;
+    rounds: number;
+    /** Always two, in no particular order. */
+    sides: DemoSide[];
+}
+
+export interface DemoSide {
+    score: number;
+    firstHalf: number;
+    secondHalf: number;
+    players: DemoPlayer[];
+    coaches: { steamId: string; name: string }[];
+}
+
+export interface DemoPlayer {
+    steamId: string;
+    name: string;
+    kills: number;
+    deaths: number;
+    assists: number;
+    damage: number;
+    headshotKills: number;
+}
+
+export interface DemoImportStatus {
+    paused: boolean;
+    message: string | null;
+}
+
+/** What an import would do, from POST /DemoImport/{teamId}/{matchId}/preview. */
+export interface DemoImportPreview {
+    /** 0 or 1: the side with the most team members. Null when nobody from the team is in the demo. */
+    ourSide: number | null;
+    /** The map of the match this demo would fill; one past the last map adds a map. */
+    mapOrder: number;
+    replacesImport: boolean;
+    sides: {
+        score: number;
+        firstHalf: number;
+        secondHalf: number;
+        players: (Omit<DemoPlayer, 'damage' | 'headshotKills'> & { userId: string | null; username: string | null; canPlay: boolean; adr: number; headshotPercentage: number })[];
+        coaches: { steamId: string; name: string; userId: string | null; username: string | null }[];
+    }[];
+    /** The saved coaches plus the detected side's coaches. */
+    coaches: MatchCoachEntry[];
+}
+
+export interface ApplyDemoImportRequest {
+    demo: DemoSummary;
+    ourSide: number;
+    mapOrder: number;
+    players: { steamId: string; userId: string | null }[];
+    coaches: MatchCoachRequest[];
     version: number;
 }
 
