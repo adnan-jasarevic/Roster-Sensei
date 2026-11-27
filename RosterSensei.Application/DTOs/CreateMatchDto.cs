@@ -19,6 +19,8 @@ public class CreateMatchDto
     // Optional: who played, with optional ratings (finished matches only). Same rules as the lineup endpoint.
     // On an edit, null keeps the current lineup (minus its ratings, if the match is no longer finished).
     public List<LineupPlayerDto>? Lineup { get; set; }
+    // Optional: the coaches who were there. On an edit, null keeps the saved ones.
+    public List<MatchCoachDto>? Coaches { get; set; }
 }
 
 // Body of PUT /api/Matches/{teamId}/{matchId}: the whole match, as when adding it.

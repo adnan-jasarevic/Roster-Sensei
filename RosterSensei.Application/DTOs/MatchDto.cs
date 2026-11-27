@@ -16,6 +16,10 @@ public class MatchDto
     public string? Notes { get; set; }
     // Who was in the lineup. Empty when it wasn't recorded.
     public List<MatchLineupEntryDto> Lineup { get; set; } = new List<MatchLineupEntryDto>();
+    // Who coached. Empty when nobody did, or it wasn't recorded.
+    public List<MatchCoachEntryDto> Coaches { get; set; } = new List<MatchCoachEntryDto>();
+    // Orders of the maps whose stats came from a demo.
+    public List<int> ImportedMapOrders { get; set; } = new List<int>();
     // Sent back with an edit, so a save over someone else's newer changes can be refused.
     public int Version { get; set; }
 }

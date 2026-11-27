@@ -155,6 +155,67 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("RosterSensei.Domain.Entities.DemoParserStatus", b =>
+                {
+                    b.Property<string>("ParserVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("PausedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PausedForPatch")
+                        .HasColumnType("int");
+
+                    b.HasKey("ParserVersion");
+
+                    b.ToTable("DemoParserStatuses");
+                });
+
+            modelBuilder.Entity("RosterSensei.Domain.Entities.DemoPlayerStats", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Assists")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Damage")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Deaths")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HeadshotKills")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Kills")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MatchDemoImportId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SteamId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MatchDemoImportId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("DemoPlayerStats");
+                });
+
             modelBuilder.Entity("RosterSensei.Domain.Entities.MapRating", b =>
                 {
                     b.Property<int>("Id")
@@ -248,6 +309,101 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.HasIndex("TeamId");
 
                     b.ToTable("Matches");
+                });
+
+            modelBuilder.Entity("RosterSensei.Domain.Entities.MatchCoach", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("MatchId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SteamId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MatchId", "SteamId")
+                        .IsUnique()
+                        .HasFilter("[SteamId] IS NOT NULL");
+
+                    b.HasIndex("MatchId", "UserId")
+                        .IsUnique()
+                        .HasFilter("[UserId] IS NOT NULL");
+
+                    b.ToTable("MatchCoaches");
+                });
+
+            modelBuilder.Entity("RosterSensei.Domain.Entities.MatchDemoImport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("ImportedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ImportedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("MapName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("MapOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MatchId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ParserVersion")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("PatchVersion")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Rounds")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TeamId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PatchVersion");
+
+                    b.HasIndex("MatchId", "MapOrder")
+                        .IsUnique();
+
+                    b.HasIndex("TeamId", "Fingerprint")
+                        .IsUnique();
+
+                    b.ToTable("MatchDemoImports");
                 });
 
             modelBuilder.Entity("RosterSensei.Domain.Entities.MatchMap", b =>
@@ -744,6 +900,17 @@ namespace RosterSensei.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("RosterSensei.Domain.Entities.DemoPlayerStats", b =>
+                {
+                    b.HasOne("RosterSensei.Domain.Entities.MatchDemoImport", "MatchDemoImport")
+                        .WithMany("Players")
+                        .HasForeignKey("MatchDemoImportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MatchDemoImport");
+                });
+
             modelBuilder.Entity("RosterSensei.Domain.Entities.MapRating", b =>
                 {
                     b.HasOne("RosterSensei.Domain.Entities.TeamMember", "Member")
@@ -763,6 +930,28 @@ namespace RosterSensei.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("RosterSensei.Domain.Entities.MatchCoach", b =>
+                {
+                    b.HasOne("RosterSensei.Domain.Entities.Match", "Match")
+                        .WithMany("Coaches")
+                        .HasForeignKey("MatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Match");
+                });
+
+            modelBuilder.Entity("RosterSensei.Domain.Entities.MatchDemoImport", b =>
+                {
+                    b.HasOne("RosterSensei.Domain.Entities.Match", "Match")
+                        .WithMany("DemoImports")
+                        .HasForeignKey("MatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Match");
                 });
 
             modelBuilder.Entity("RosterSensei.Domain.Entities.MatchMap", b =>
@@ -882,9 +1071,18 @@ namespace RosterSensei.Infrastructure.Migrations
 
             modelBuilder.Entity("RosterSensei.Domain.Entities.Match", b =>
                 {
+                    b.Navigation("Coaches");
+
+                    b.Navigation("DemoImports");
+
                     b.Navigation("Maps");
 
                     b.Navigation("Participations");
+                });
+
+            modelBuilder.Entity("RosterSensei.Domain.Entities.MatchDemoImport", b =>
+                {
+                    b.Navigation("Players");
                 });
 
             modelBuilder.Entity("RosterSensei.Domain.Entities.Team", b =>

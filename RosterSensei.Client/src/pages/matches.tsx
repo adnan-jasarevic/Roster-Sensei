@@ -9,6 +9,7 @@ import { type LineupEntry, type Match, type Team, canManageTeam, hasResult, isUp
 import MatchModal from '../components/match-modal';
 import LineupModal from '../components/lineup-modal';
 import MatchDetailsModal from '../components/match-details-modal';
+import DemoImportModal from '../components/demo-import-modal';
 import { MapChip } from '../components/map-chip';
 import { MatchStateBadge } from '../components/domain-badges';
 import PageHeader, { PageContainer } from '../components/page-header';
@@ -25,7 +26,8 @@ type Dialog =
     /** recordResult: opened from "Add result", with the status already set to Finished. */
     | { kind: 'editMatch'; matchId: number; recordResult: boolean }
     | { kind: 'lineup'; matchId: number }
-    | { kind: 'details'; matchId: number };
+    | { kind: 'details'; matchId: number }
+    | { kind: 'importDemo'; matchId: number };
 
 const NO_DIALOG: Dialog = { kind: 'none' };
 
@@ -70,6 +72,7 @@ function MatchesContent({ team }: { team: Team }) {
     const lineupMatch = dialog.kind === 'lineup' ? matches?.find(m => m.id === dialog.matchId) : undefined;
     const editedMatch = dialog.kind === 'editMatch' ? matches?.find(m => m.id === dialog.matchId) : undefined;
     const detailsMatch = dialog.kind === 'details' ? matches?.find(m => m.id === dialog.matchId) : undefined;
+    const demoMatch = dialog.kind === 'importDemo' ? matches?.find(m => m.id === dialog.matchId) : undefined;
 
     const handleSaved = (message: string) => {
         closeDialog();
@@ -150,6 +153,22 @@ function MatchesContent({ team }: { team: Team }) {
                     match={detailsMatch}
                     onClose={closeDialog}
                     onEditLineup={canManageMatches ? () => setDialog({ kind: 'lineup', matchId: detailsMatch.id }) : undefined}
+                    onImportDemo={canManageMatches && detailsMatch.status !== 'Cancelled' ? () => setDialog({ kind: 'importDemo', matchId: detailsMatch.id }) : undefined}
+                />
+            )}
+
+            {demoMatch && (
+                <DemoImportModal
+                    key={demoMatch.id}
+                    teamId={team.id}
+                    match={demoMatch}
+                    onClose={() => setDialog({ kind: 'details', matchId: demoMatch.id })}
+                    onSaved={() => {
+                        setDialog({ kind: 'details', matchId: demoMatch.id });
+                        toast.success(`Demo stats saved for the match vs ${demoMatch.opponentName}.`);
+                        reload();
+                    }}
+                    onStale={reload}
                 />
             )}
 

@@ -29,6 +29,8 @@ public class MatchRepository : IMatchRepository
         return await _context.Matches
             .Include(m => m.Maps)
             .Include(m => m.Participations)
+            .Include(m => m.Coaches)
+            .Include(m => m.DemoImports).ThenInclude(i => i.Players)
             .AsSplitQuery()
             .SingleOrDefaultAsync(m => m.Id == matchId && m.TeamId == teamId);
     }
@@ -58,6 +60,8 @@ public class MatchRepository : IMatchRepository
         return await _context.Matches
             .Include(m => m.Maps)
             .Include(m => m.Participations)
+            .Include(m => m.Coaches)
+            .Include(m => m.DemoImports)
             .AsSplitQuery()
             .Where(m => m.TeamId == teamId)
             .OrderByDescending(m => m.ScheduledDate)

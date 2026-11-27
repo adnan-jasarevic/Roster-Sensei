@@ -42,4 +42,15 @@ public class IdentityService : IIdentityService
             .ToDictionaryAsync(u => u.Id, u => u.UserName ?? string.Empty);
     }
 
+    public async Task<Dictionary<string, string>> GetUserIdsBySteamIdsAsync(IEnumerable<string> steamIds)
+    {
+        var ids = steamIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new Dictionary<string, string>();
+
+        return await _userManager.Users
+            .Where(u => u.SteamId != null && ids.Contains(u.SteamId))
+            .ToDictionaryAsync(u => u.SteamId!, u => u.Id);
+    }
+
 }

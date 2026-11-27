@@ -80,6 +80,8 @@ builder.Services.AddScoped<IIdentityService, RosterSensei.Infrastructure.Service
 builder.Services.AddScoped<IAuthService, RosterSensei.Infrastructure.Services.AuthService>();
 builder.Services.AddScoped<IMatchRepository, MatchRepository>();
 builder.Services.AddScoped<IMatchService, MatchService>();
+builder.Services.AddScoped<IDemoImportRepository, DemoImportRepository>();
+builder.Services.AddScoped<IDemoImportService, DemoImportService>();
 builder.Services.AddScoped<ITeamEventRepository, TeamEventRepository>();
 builder.Services.AddScoped<ITeamEventService, TeamEventService>();
 builder.Services.AddScoped<ITeamEventTypeRepository, TeamEventTypeRepository>();

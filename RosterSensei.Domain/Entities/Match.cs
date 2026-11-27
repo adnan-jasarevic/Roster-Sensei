@@ -48,6 +48,10 @@ public class Match
 
     public ICollection<MatchParticipation> Participations { get; set; } = new List<MatchParticipation>();
 
+    public ICollection<MatchCoach> Coaches { get; set; } = new List<MatchCoach>();
+
+    public ICollection<MatchDemoImport> DemoImports { get; set; } = new List<MatchDemoImport>();
+
     // Goes up by one on every edit. An edit sends the version it started from, so a save over
     // someone else's newer changes is refused instead of silently overwriting them.
     public int Version { get; set; }

@@ -31,7 +31,7 @@ public class MatchService : IMatchService
 
         var maps = ToMaps(dto.Maps);
 
-        var (ourScore, opponentScore) = SeriesScore(maps, dto.BestOf) ?? (dto.OurScore, dto.OpponentScore);
+        var (ourScore, opponentScore) = MatchScores.FromMaps(maps, dto.BestOf) ?? (dto.OurScore, dto.OpponentScore);
 
         // Who played, with their ratings, saved together with the result.
         var lineup = ToParticipations(dto.Lineup ?? new List<LineupPlayerDto>());
@@ -39,6 +39,10 @@ public class MatchService : IMatchService
             return Result<MatchDto>.Failure("Every player in the lineup must be a member of the team.");
         if (lineup.Any(p => team.Members.Any(m => m.UserId == p.UserId && !m.Role.CanPlay())))
             return Result<MatchDto>.Failure(CoachInLineupMessage);
+
+        var coaches = MatchCoachList.Build(dto.Coaches ?? new List<MatchCoachDto>(), team);
+        if (coaches == null)
+            return Result<MatchDto>.Failure(MatchCoachList.NotTeamMemberMessage);
 
         var newMatch = new Match
         {
@@ -54,12 +58,13 @@ public class MatchService : IMatchService
             BestOf = dto.BestOf,
             Maps = maps,
             Notes = dto.Notes,
-            Participations = lineup
+            Participations = lineup,
+            Coaches = coaches
         };
 
         var savedMatch = await _matchRepository.AddAsync(newMatch);
 
-        var usernames = await _identityService.GetUsernamesByIdsAsync(lineup.Select(p => p.UserId));
+        var usernames = await _identityService.GetUsernamesByIdsAsync(UserIdsOf(savedMatch));
         var resultDto = MapToDto(savedMatch, usernames);
         return Result<MatchDto>.SuccessResult(resultDto);
     }
@@ -99,8 +104,16 @@ public class MatchService : IMatchService
                 return Result<MatchDto>.Failure(CoachInLineupMessage);
         }
 
+        List<MatchCoach>? coaches = null;
+        if (dto.Coaches != null)
+        {
+            coaches = MatchCoachList.Build(dto.Coaches, team, match.Coaches);
+            if (coaches == null)
+                return Result<MatchDto>.Failure(MatchCoachList.NotTeamMemberMessage);
+        }
+
         var maps = ToMaps(dto.Maps);
-        var (ourScore, opponentScore) = SeriesScore(maps, dto.BestOf) ?? (dto.OurScore, dto.OpponentScore);
+        var (ourScore, opponentScore) = MatchScores.FromMaps(maps, dto.BestOf) ?? (dto.OurScore, dto.OpponentScore);
 
         match.OpponentName = dto.OpponentName;
         match.Tournament = dto.Tournament;
@@ -124,10 +137,24 @@ public class MatchService : IMatchService
                 match.Participations.Add(player);
         }
 
+        if (coaches != null)
+        {
+            match.Coaches.Clear();
+            foreach (var coach in coaches)
+                match.Coaches.Add(coach);
+        }
+
         // Only a finished match keeps ratings and stats.
         if (match.Status != MatchStatus.Finished)
             foreach (var player in match.Participations)
                 player.ClearStats();
+
+        // A demo's stats belong to one map: they go when that map is removed or renamed, or the match
+        // is no longer finished. The lineup totals stay as sent.
+        foreach (var import in match.DemoImports.ToList())
+            if (match.Status != MatchStatus.Finished
+                || !match.Maps.Any(m => m.Order == import.MapOrder && string.Equals(m.MapName, import.MapName, StringComparison.OrdinalIgnoreCase)))
+                match.DemoImports.Remove(import);
 
         if (!await _matchRepository.UpdateAsync(match, dto.Version))
         {
@@ -137,7 +164,7 @@ public class MatchService : IMatchService
             return Result<MatchDto>.Conflict(EditConflictMessage);
         }
 
-        var usernames = await _identityService.GetUsernamesByIdsAsync(match.Participations.Select(p => p.UserId));
+        var usernames = await _identityService.GetUsernamesByIdsAsync(UserIdsOf(match));
         return Result<MatchDto>.SuccessResult(MapToDto(match, usernames));
     }
 
@@ -152,7 +179,7 @@ public class MatchService : IMatchService
         var matches = await _matchRepository.GetMatchesByTeamIdAsync(teamId, cancellationToken);
 
         // One query for every name in every lineup.
-        var usernames = await _identityService.GetUsernamesByIdsAsync(matches.SelectMany(m => m.Participations).Select(p => p.UserId));
+        var usernames = await _identityService.GetUsernamesByIdsAsync(matches.SelectMany(UserIdsOf));
         var dtoList = matches.Select(m => MapToDto(m, usernames)).ToList();
 
         return Result<List<MatchDto>>.SuccessResult(dtoList);
@@ -286,23 +313,12 @@ public class MatchService : IMatchService
     private static int Percentage(int part, int total) =>
         total == 0 ? 0 : (int)Math.Round((double)part / total * 100);
 
-    // Works out the series score from the played maps: rounds for a Bo1, maps won otherwise.
-    // Returns null when no map has a score, so the score entered for the match is used instead.
-    private static (int Our, int Opponent)? SeriesScore(List<MatchMap> maps, int? bestOf)
-    {
-        var played = maps.Where(m => m.OurScore.HasValue && m.OpponentScore.HasValue).ToList();
-        if (played.Count == 0)
-            return null;
+    // Everyone whose name a match shows: its lineup and the coaches from the team.
+    internal static IEnumerable<string> UserIdsOf(Match match) =>
+        match.Participations.Select(p => p.UserId)
+            .Concat(match.Coaches.Where(c => c.UserId != null).Select(c => c.UserId!));
 
-        if ((bestOf ?? 1) == 1 && played.Count == 1)
-            return (played[0].OurScore!.Value, played[0].OpponentScore!.Value);
-
-        return (
-            played.Count(m => m.OurScore > m.OpponentScore),
-            played.Count(m => m.OpponentScore > m.OurScore));
-    }
-
-    private static MatchDto MapToDto(Match match, IReadOnlyDictionary<string, string> usernames)
+    internal static MatchDto MapToDto(Match match, IReadOnlyDictionary<string, string> usernames)
     {
         return new MatchDto
         {
@@ -331,6 +347,8 @@ public class MatchService : IMatchService
             MatchOutcome = match.Outcome?.ToString(),
             Notes = match.Notes,
             Lineup = ToLineupDto(match.Participations, usernames),
+            Coaches = MatchCoachList.ToDto(match.Coaches, usernames),
+            ImportedMapOrders = match.DemoImports.Select(i => i.MapOrder).OrderBy(o => o).ToList(),
             Version = match.Version
         };
     }
