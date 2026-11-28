@@ -4,7 +4,8 @@ import dragAndDropAddon, { type EventInteractionArgs } from 'react-big-calendar/
 import axios from 'axios';
 import { addDays, endOfMonth, format, getDay, parse, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { enUS } from 'date-fns/locale';
-import { CalendarOff, CalendarPlus, Tags } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { CalendarOff, CalendarPlus, Tags, UsersRound } from 'lucide-react';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import './calendar.css';
@@ -16,10 +17,11 @@ import EventModal from '../components/event-modal';
 import EventTypesModal from '../components/event-types-modal';
 import { EventTypeIcon, eventTitle, otherTypeOf, textColorFor } from '../lib/event-types';
 import { getApiErrorMessage } from '../services/errors';
+import { lineupWindows, listNames, windowTimes, type LineupWindow } from '../lib/availability';
 import PageHeader, { PageContainer } from '../components/page-header';
 import TeamGate from '../components/team-gate';
 import { Alert, Button, Card, ErrorState, Modal, Skeleton, useToast } from '../components/ui';
-import { type Match, type Team, type SaveTeamEventRequest, type TeamEvent, type TeamEventType, type TeamEventTypes, type TeamOffDay, canManageTeam, hasResult } from '../types';
+import { type Match, type Team, type SaveTeamEventRequest, type TeamEvent, type TeamEventType, type TeamAvailability, type TeamEventTypes, type TeamOffDay, canManageTeam, hasResult } from '../types';
 
 // Weeks start on Monday.
 const localizer = dateFnsLocalizer({
@@ -44,6 +46,8 @@ interface CalendarItem {
     cancelled: boolean;
     /** Can be dragged to new times: a team event (not a recorded match) that isn't being saved right now. */
     draggable: boolean;
+    /** Set on the shaded background bands: a time when enough players are free for a lineup. */
+    lineup?: LineupWindow;
 }
 
 // The addon is CommonJS. Depending on the bundler, its default export arrives as is or wrapped once more.
@@ -96,7 +100,12 @@ interface CalendarData {
     matches: Match[];
     eventTypes: TeamEventTypes;
     offDays: TeamOffDay[];
+    /** Null when it couldn't be loaded: the calendar still works, just without the free-time bands. */
+    availability: TeamAvailability | null;
 }
+
+// A planned session starts at the free window and lasts this long, or less if the window is shorter.
+const PLANNED_SESSION_MS = 2 * 60 * 60 * 1000;
 
 // A month grid is unreadable on a phone, so small screens start on the agenda list.
 const initialView = (): View => (window.matchMedia('(max-width: 639px)').matches ? Views.AGENDA : Views.MONTH);
@@ -120,13 +129,18 @@ function CalendarContent({ team }: { team: Team }) {
 
     const load = useCallback<ResourceLoader<CalendarData>>(async signal => {
         const range = { from: from.toISOString(), to: to.toISOString() };
-        const [events, matches, eventTypes, offDays] = await Promise.all([
+        const [events, matches, eventTypes, offDays, availability] = await Promise.all([
             api.get<TeamEvent[]>(`/teams/${team.id}/events`, { signal, params: range }),
             api.get<Match[]>(`/Matches/${team.id}`, { signal }),
             api.get<TeamEventTypes>(`/teams/${team.id}/event-types`, { signal }),
             api.get<TeamOffDay[]>(`/teams/${team.id}/off-days`, { signal, params: range }),
+            api.get<TeamAvailability>(`/teams/${team.id}/availability`, { signal, params: range })
+                .then(response => response.data, (error: unknown) => {
+                    if (signal.aborted) throw error;
+                    return null;
+                }),
         ]);
-        return { events: events.data, matches: matches.data, eventTypes: eventTypes.data, offDays: offDays.data };
+        return { events: events.data, matches: matches.data, eventTypes: eventTypes.data, offDays: offDays.data, availability };
     }, [team.id, from, to]);
 
     // Keeps the current events on screen while the next month loads, instead of blanking the grid.
@@ -149,6 +163,30 @@ function CalendarContent({ team }: { team: Team }) {
     }, [data, moves]);
 
     const offDayKeys = useMemo(() => new Set((data?.offDays ?? []).map(d => d.date)), [data]);
+
+    // Times enough players are free for a lineup. None are shown on off days: nobody plays then.
+    const windows = useMemo(
+        () => (data?.availability ? lineupWindows(data.availability, start => offDayKeys.has(dayKey(start))) : []),
+        [data, offDayKeys],
+    );
+    const windowsByDay = useMemo(() => {
+        const byDay = new Map<string, LineupWindow[]>();
+        for (const window of windows) byDay.set(dayKey(window.start), [...(byDay.get(dayKey(window.start)) ?? []), window]);
+        return byDay;
+    }, [windows]);
+    const bands = useMemo<CalendarItem[]>(() => {
+        const other = types.length > 0 ? otherTypeOf(types) : undefined;
+        if (!other) return [];
+        return windows.map(window => ({
+            title: `${window.playersFree} players free`,
+            start: window.start,
+            end: window.end,
+            type: other,
+            cancelled: false,
+            draggable: false,
+            lineup: window,
+        }));
+    }, [windows, types]);
 
     const items = useMemo<CalendarItem[]>(() => {
         if (!data || types.length === 0) return [];
@@ -298,6 +336,12 @@ function CalendarContent({ team }: { team: Team }) {
         setModal({ mode: 'create', start, end });
     };
 
+    // Opens a new event at the start of a free window, for a manager planning a session in it.
+    const planInWindow = useCallback((window: LineupWindow) => {
+        const end = new Date(Math.min(window.end.getTime(), window.start.getTime() + PLANNED_SESSION_MS));
+        setModal({ mode: 'create', start: window.start, end });
+    }, []);
+
     const openNewEvent = () => {
         const start = new Date();
         start.setMinutes(0, 0, 0);
@@ -315,6 +359,8 @@ function CalendarContent({ team }: { team: Team }) {
                     {...props}
                     isOffDay={offDayKeys.has(dayKey(props.date))}
                     onOpenOffDay={canManage ? () => setModal({ mode: 'offDay', day: props.date }) : undefined}
+                    lineupWindows={windowsByDay.get(dayKey(props.date))}
+                    onPlan={canManage ? planInWindow : undefined}
                 />
             ),
         },
@@ -327,7 +373,7 @@ function CalendarContent({ team }: { team: Team }) {
                 <EventLabel item={item} onOpen={item.event ? () => openItem(item) : undefined} />
             ),
         },
-    }), [offDayKeys, canManage, openItem]);
+    }), [offDayKeys, canManage, openItem, windowsByDay, planInWindow]);
 
     return (
         <PageContainer>
@@ -363,6 +409,16 @@ function CalendarContent({ team }: { team: Team }) {
                         Off day
                     </li>
                 )}
+                {data?.availability && (
+                    <li className="text-xs font-medium text-fg-muted">
+                        <Link to="/availability" className="flex items-center gap-1.5 rounded hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--rs-focus)">
+                            <span className="rs-lineup-swatch flex size-5 items-center justify-center rounded">
+                                <UsersRound className="size-3" aria-hidden="true" />
+                            </span>
+                            {data.availability.playersNeeded}+ players free
+                        </Link>
+                    </li>
+                )}
             </ul>
 
             <Card className={cx('team-calendar h-[75dvh] min-h-[560px] overflow-hidden p-2 sm:p-4', isFetching && 'is-refreshing')} aria-busy={isFetching} aria-label="Team calendar">
@@ -380,6 +436,7 @@ function CalendarContent({ team }: { team: Team }) {
                         localizer={localizer}
                         culture="en-US"
                         events={items}
+                        backgroundEvents={bands}
                         view={view}
                         onView={setView}
                         date={date}
@@ -402,8 +459,10 @@ function CalendarContent({ team }: { team: Team }) {
                         scrollToTime={new Date(1970, 0, 1, 12, 0)}
                         popup
                         components={components}
-                        tooltipAccessor={item => `${item.type.name}: ${item.title}${item.cancelled ? ' (cancelled, off day)' : ''}`}
-                        eventPropGetter={item => ({
+                        tooltipAccessor={item => (item.lineup
+                            ? `${item.title}, ${windowTimes(item.lineup)}: ${listNames(item.lineup.players.map(p => p.username))}`
+                            : `${item.type.name}: ${item.title}${item.cancelled ? ' (cancelled, off day)' : ''}`)}
+                        eventPropGetter={item => item.lineup ? { className: 'is-lineup-window' } : ({
                             className: cx(!item.event && 'is-readonly', item.cancelled && 'is-cancelled', item.event && moves[item.event.id]?.saving && 'is-saving'),
                             style: { backgroundColor: item.type.color, color: textColorFor(item.type.color) },
                         })}
@@ -458,6 +517,16 @@ function MonthEventChip({ event: item }: EventProps<CalendarItem>) {
 // buttons, so they only need a label. Multi-day events sit in the all-day row, where the library
 // renders a plain div, so they get a real button like month view. Only the all-day row passes slotStart.
 function TimeGridEventChip(props: EventProps<CalendarItem>) {
+    // A free-time band: drawn behind the events, and clicks go through it to the time slots underneath.
+    if (props.event.lineup) {
+        return (
+            <span className="rs-lineup-label">
+                <UsersRound className="size-3 shrink-0" aria-hidden="true" />
+                <span>{props.event.lineup.playersFree} free</span>
+                <span className="sr-only"> for a lineup, {windowTimes(props.event.lineup)}</span>
+            </span>
+        );
+    }
     const inAllDayRow = (props as EventProps<CalendarItem> & { slotStart?: Date }).slotStart !== undefined;
     return <EventLabel item={props.event} clickable={inAllDayRow && Boolean(props.event.event)} />;
 }
@@ -493,6 +562,12 @@ function TimeGridA11yFix({ children }: { children: ReactNode }) {
         const fix = () => {
             root.querySelectorAll('.rbc-time-header [role="rowgroup"], .rbc-time-header [role="row"]')
                 .forEach(element => element.removeAttribute('role'));
+            // Free-time bands are scenery, not buttons: the library makes them focusable, but clicking them
+            // goes through to the slots, so they keep only their text for screen readers.
+            root.querySelectorAll<HTMLElement>('.rbc-background-event[role="button"]').forEach(element => {
+                element.removeAttribute('role');
+                element.removeAttribute('tabindex');
+            });
             root.querySelectorAll<HTMLElement>('.rbc-time-content:not([tabindex])').forEach(element => {
                 element.tabIndex = 0;
                 element.setAttribute('role', 'region');
@@ -541,13 +616,36 @@ interface MonthDateHeaderProps {
     isOffDay: boolean;
     /** Opens the off day dialog; only for people who can change off days. */
     onOpenOffDay?: () => void;
+    /** The day's times with enough players free for a lineup. */
+    lineupWindows?: LineupWindow[];
+    /** Starts a new event in a free window; only for people who can add events. */
+    onPlan?: (window: LineupWindow) => void;
 }
 
-// The library's own date header, plus an "Off day" tag. For managers the tag is a button, so an off day
-// can be cleared by keyboard as well as by clicking the day.
-function MonthDateHeader({ label, drilldownView, onDrillDown, isOffDay, onOpenOffDay }: MonthDateHeaderProps) {
+// The library's own date header, plus an "Off day" tag or the day's longest free window. For managers
+// the tags are buttons: one clears the off day, the other starts an event in the free window.
+function MonthDateHeader({ label, drilldownView, onDrillDown, isOffDay, onOpenOffDay, lineupWindows: windows, onPlan }: MonthDateHeaderProps) {
+    const longest = windows?.reduce((best, w) => (w.end.getTime() - w.start.getTime() > best.end.getTime() - best.start.getTime() ? w : best));
+    const more = (windows?.length ?? 0) - 1;
+    // Starts with the visible times, so speech input can say what it sees.
+    const spoken = longest && `${windowTimes(longest)}, ${longest.playersFree} players free${more > 0 ? `, and ${more} more free ${more === 1 ? 'window' : 'windows'}` : ''}`;
+    const lineupTag = longest && (
+        <>
+            <UsersRound className="size-2.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{windowTimes(longest)}</span>
+            {more > 0 && <span>+{more}</span>}
+        </>
+    );
     return (
-        <span className="flex items-center justify-end gap-1">
+        <span className="flex min-w-0 items-center justify-end gap-1">
+            {lineupTag && (onPlan ? (
+                <button type="button" className="rs-lineup-tag" aria-label={spoken} onClick={() => onPlan(longest!)} title={`Plan an event in this window: ${listNames(longest!.players.map(p => p.username))}`}>{lineupTag}</button>
+            ) : (
+                <span className="rs-lineup-tag" title={listNames(longest!.players.map(p => p.username))}>
+                    <span aria-hidden="true" className="contents">{lineupTag}</span>
+                    <span className="sr-only">{spoken}</span>
+                </span>
+            ))}
             {isOffDay && (onOpenOffDay ? (
                 <button type="button" className="rs-off-day-tag" onClick={onOpenOffDay}>Off day</button>
             ) : (

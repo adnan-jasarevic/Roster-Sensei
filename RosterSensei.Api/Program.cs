@@ -95,6 +95,8 @@ builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddSteam(allowedOrigins);
 builder.Services.AddScoped<IMapRatingRepository, MapRatingRepository>();
 builder.Services.AddScoped<IMapPoolService, MapPoolService>();
+builder.Services.AddScoped<IAvailabilityRepository, AvailabilityRepository>();
+builder.Services.AddScoped<IAvailabilityService, AvailabilityService>();
 // Test data tools. Off unless MasterTester:Enabled is true (Development only) and the user is listed in MasterTester:Emails.
 builder.Services.AddScoped<IMasterTesterService, RosterSensei.Infrastructure.Services.MasterTesterService>();
 

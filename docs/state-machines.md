@@ -120,6 +120,7 @@ Tests: `EventTypeAndOffDayTests`, `ConcurrentChangeTests`, `e2e/calendar.spec.ts
 | Event type | Premade, custom, or the locked "Other" | Removing a type moves its events to Other. Other can't be changed or removed. `TeamEventTypeService` |
 | Off day | Marked or not | Marking twice is not an error. Nothing can be planned on a marked day. `TeamOffDayService` |
 | Steam link | Unlinked or linked | Unlinking twice is not an error. An ID linked to another user is a 409. `AccountService` |
+| Availability day | Follows the usual week, or overridden | Saving an override creates the user's availability if needed; resetting a day that isn't overridden is a 404. Overrides of past dates are pruned a week later. `AvailabilityService` |
 
 ### Results of a write
 
@@ -210,6 +211,7 @@ content with `key={team.id}`, so switching teams starts every machine on the pag
 | Where | States |
 |---|---|
 | Dragged event (`PendingMove` in `calendar.tsx`) | saving, saved and waiting for the reload, dropped |
+| Availability saves (`MyAvailabilityEditor` in `availability.tsx`) | idle, saving, saved, failed. Saves queue one after another, so the last paint wins; when the queue empties after a failure, the grid reloads what the server has. |
 | Register page | form, submitting, registered (then redirects after 2 seconds) |
 | Add match form | The status picks the fields: Finished shows a series score, or map scores once maps are picked. Best-of caps the maps. |
 | Toast (`ui/toast.tsx`) | counting down, paused while hovered or focused; errors never count down |

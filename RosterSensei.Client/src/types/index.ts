@@ -338,6 +338,39 @@ export interface TeamOffDay {
     endTime: string;
 }
 
+/**
+ * One day of availability: 48 characters, one per half hour from local midnight, '1' free and '0' not.
+ */
+export type DaySlots = string;
+
+/** The signed-in user's own availability, in their saved time zone. */
+export interface MyAvailability {
+    /** IANA time zone, or null until anything has been saved. */
+    timeZone: string | null;
+    /** Seven days, Monday first. */
+    weekly: DaySlots[];
+    /** Dates that differ from the usual week, from a week ago onwards. */
+    overrides: { date: string; slots: DaySlots }[];
+}
+
+export interface TeamAvailabilityMember {
+    userId: string;
+    username: string;
+    role: TeamRole;
+    /** False for Coaches: they don't play, so they never count towards the five. */
+    countsTowardsLineup: boolean;
+    hasFilledIn: boolean;
+}
+
+export interface TeamAvailability {
+    slotMinutes: number;
+    /** How many players must be free for a time to count as a lineup. */
+    playersNeeded: number;
+    members: TeamAvailabilityMember[];
+    /** Half hours with at least one person free, in time order. `start` is UTC. */
+    slots: { start: string; userIds: string[] }[];
+}
+
 export interface TeamEvent {
     id: number;
     teamId: number;

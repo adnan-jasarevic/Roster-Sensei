@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { test, expect, hasHorizontalScroll } from './support/fixtures';
-import { finishedMatch, team, type MockApi } from './support/mock-api';
+import { finishedMatch, freeDay, freeSlots, team, type MockApi } from './support/mock-api';
 
 const PAGES = [
     { path: '/login', heading: 'Welcome back', signedIn: false },
@@ -9,6 +9,7 @@ const PAGES = [
     { path: '/dashboard', heading: 'Dashboard', signedIn: true },
     { path: '/team', heading: 'Team roster', signedIn: true },
     { path: '/calendar', heading: 'Calendar', signedIn: true },
+    { path: '/availability', heading: 'Availability (When2Play)', signedIn: true },
     { path: '/matches', heading: 'Matches', signedIn: true },
     { path: '/map-pool', heading: 'Map Pool', signedIn: true },
     { path: '/statistics', heading: 'Statistics', signedIn: true },
@@ -28,6 +29,13 @@ function withData(api: MockApi) {
             { userId: 'me', side: 'CT', mapName: 'Nuke', rating: 8 },
         ],
     });
+    // Enough free time for a lineup today, so the heatmap and the calendar show every shade.
+    const today = new Date().toISOString().slice(0, 10);
+    tokyo.availability = [
+        ...freeSlots(`${today}T17:00:00Z`, `${today}T19:00:00Z`, ['me', 'kenji', 'mika', 'boss', 'yuki']),
+        ...freeSlots(`${today}T19:00:00Z`, `${today}T20:00:00Z`, ['me', 'kenji']),
+    ];
+    api.myAvailability = { ...api.myAvailability, timeZone: 'Europe/Sarajevo', weekly: [freeDay('18:00', '20:00'), ...api.myAvailability.weekly.slice(1)] };
     tokyo.members[1].steamProfileUrl = 'https://steamcommunity.com/profiles/76561198000000001';
     api.teams = [tokyo];
     api.steamId = '76561198000000002';

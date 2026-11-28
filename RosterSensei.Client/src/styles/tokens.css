@@ -42,6 +42,13 @@
     --rs-danger-soft: rgb(255 143 143 / 0.13);
     --rs-neutral-soft: rgb(247 243 239 / 0.09);
 
+    /* Availability: free time is a status, so it is green. Solid for the cells someone painted and for
+       times a lineup is free; the heatmap's lighter steps mix the chart ink in. */
+    --rs-free: #5fd3a8;
+    --rs-on-free: #062a1d;
+    --rs-free-soft: rgb(95 211 168 / 0.16);
+    --rs-free-line: rgb(95 211 168 / 0.55);
+
     /* One series per chart, in ink rather than red: red already means "loss" in this app. */
     --rs-chart-series: #ede7e2;
     --rs-chart-grid: #2e2629;
@@ -80,6 +87,11 @@
     --rs-danger-soft: rgb(179 0 42 / 0.08);
     --rs-neutral-soft: rgb(28 21 24 / 0.06);
 
+    --rs-free: #0b7555;
+    --rs-on-free: #ffffff;
+    --rs-free-soft: rgb(11 117 85 / 0.1);
+    --rs-free-line: rgb(11 117 85 / 0.5);
+
     --rs-chart-series: #2a2326;
     --rs-chart-grid: #e6dfda;
 }
@@ -112,6 +124,10 @@
     --color-danger: var(--rs-danger-text);
     --color-danger-soft: var(--rs-danger-soft);
     --color-neutral-soft: var(--rs-neutral-soft);
+    --color-free: var(--rs-free);
+    --color-on-free: var(--rs-on-free);
+    --color-free-soft: var(--rs-free-soft);
+    --color-free-line: var(--rs-free-line);
 
     --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
     --font-display: 'Zen Kaku Gothic New', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
