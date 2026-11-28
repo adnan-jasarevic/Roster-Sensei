@@ -111,7 +111,7 @@ Open http://localhost:5173. The frontend calls `https://localhost:7185/api` by d
 
 ### Master tester tools (development only)
 
-A master tester account gets a **Tester** button in the corner of every page. It creates a full team in one click (made-up players, matches with maps and lineups, calendar events, off days and map pool ratings), fills any single section of the selected team, and sends test invites. Each section can be filled with **Add**, which keeps what's there, or **Replace**, which clears it first.
+A master tester account gets a **Tester** button in the corner of every page. It creates a full team in one click (made-up players, matches with maps and lineups, calendar events, off days, availability and map pool ratings), fills any single section of the selected team, and sends test invites. Availability is only ever made up for the made-up players, never for the tester, so the heatmap and the calendar's free-time bands fill in without five real accounts. Each section can be filled with **Add**, which keeps what's there, or **Replace**, which clears it first.
 
 The tools are only switched on in Development (`MasterTester:Enabled` in `appsettings.Development.json`) and always off in Production. Testers are listed by email in user-secrets, never in the code:
 

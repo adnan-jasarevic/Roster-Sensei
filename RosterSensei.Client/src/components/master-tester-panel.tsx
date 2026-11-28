@@ -9,7 +9,7 @@ import { Alert, Badge, Button, Field, Input, Modal, useToast } from './ui';
 // Test data tools for the master tester account. The API answers 404 to everyone else, and in
 // Production, so for them this renders nothing. See MasterTesterController.
 
-type Section = 'roster' | 'matches' | 'calendar' | 'offdays' | 'mappool';
+type Section = 'roster' | 'matches' | 'calendar' | 'offdays' | 'availability' | 'mappool';
 type Mode = 'add' | 'replace';
 
 interface SeedResult {
@@ -22,6 +22,7 @@ const SECTIONS: { id: Section; label: string; description: string }[] = [
     { id: 'matches', label: 'Matches', description: '14 results with maps, half scores and lineups, plus 5 scheduled (one needs a result).' },
     { id: 'calendar', label: 'Calendar', description: 'Praccs, scrims, theory, VOD reviews and official matches, last month to next month.' },
     { id: 'offdays', label: 'Off days', description: '6 off days in the same range. Events on them show as cancelled.' },
+    { id: 'availability', label: 'Availability', description: 'A usual week and a few changed days for each made-up player, never for you. They are shared by every test team, so Replace changes them everywhere.' },
     { id: 'mappool', label: 'Map pool', description: 'T and CT ratings from every member. Add only fills the missing ones.' },
 ];
 
@@ -29,7 +30,8 @@ const SECTIONS: { id: Section; label: string; description: string }[] = [
 const SECTIONS_BY_PAGE: Record<string, Section[]> = {
     '/dashboard': ['matches', 'roster'],
     '/team': ['roster'],
-    '/calendar': ['calendar', 'offdays'],
+    '/calendar': ['calendar', 'offdays', 'availability'],
+    '/availability': ['availability'],
     '/matches': ['matches'],
     '/map-pool': ['mappool'],
     '/statistics': ['matches'],
