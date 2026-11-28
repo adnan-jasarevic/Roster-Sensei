@@ -1,6 +1,9 @@
 using RosterSensei.Application.DTOs;
 using RosterSensei.Application.Validators;
 using RosterSensei.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using RosterSensei.Infrastructure.Persistence;
 using System.Net;
 using System.Net.Http.Json;
 
@@ -141,6 +144,89 @@ public class MasterTesterApiTests : IDisposable
         var members = (await tester.GetFromJsonAsync<List<TeamMemberDto>>($"/api/Teams/{teamId}/members"))!;
         Assert.Equal(7, members.Count);
         Assert.Contains(members, m => m.IsOwner && m.Email == ApiFactory.EmailOf("tester"));
+    }
+
+    private async Task<TeamAvailabilityDto> TeamAvailabilityAsync(HttpClient tester, int teamId)
+    {
+        var from = DateTime.UtcNow.Date;
+        return (await tester.GetFromJsonAsync<TeamAvailabilityDto>($"/api/teams/{teamId}/availability?from={from:O}&to={from.AddDays(14):O}"))!;
+    }
+
+    private List<UserAvailability> StoredAvailability()
+    {
+        using var scope = _api.Services.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<AppDbContext>().UserAvailabilities.AsNoTracking().Include(a => a.Overrides).ToList();
+    }
+
+    [Fact]
+    public async Task A_full_team_gives_the_made_up_players_availability_but_leaves_the_testers_alone()
+    {
+        var tester = await _api.SignedInClientAsync("tester");
+        var teamId = await CreateFullTeamAsync(tester);
+
+        var team = await TeamAvailabilityAsync(tester, teamId);
+        var me = team.Members.Single(m => m.Username == "tester");
+        Assert.False(me.HasFilledIn);
+        Assert.All(team.Members.Where(m => m != me), m => Assert.True(m.HasFilledIn, m.Username));
+        Assert.DoesNotContain(team.Slots, s => s.UserIds.Contains(me.UserId));
+        Assert.NotEmpty(team.Slots);
+
+        // Saved in the tester's time zone, and in the same form a hand-painted week would pass validation in.
+        var stored = StoredAvailability();
+        Assert.Equal(6, stored.Count);
+        var weekValidator = new SaveWeeklyAvailabilityDtoValidator();
+        var dayValidator = new SaveAvailabilityOverrideDtoValidator();
+        foreach (var availability in stored)
+        {
+            Assert.Equal("Europe/Sarajevo", availability.TimeZone);
+            var week = new SaveWeeklyAvailabilityDto
+            {
+                TimeZone = availability.TimeZone,
+                Weekly = Enumerable.Range(0, 7).Select(d => availability.WeeklySlots.Substring(d * AvailabilitySlots.PerDay, AvailabilitySlots.PerDay)).ToList()
+            };
+            Assert.True(weekValidator.Validate(week).IsValid);
+            Assert.All(availability.Overrides, o => Assert.True(dayValidator.Validate(new SaveAvailabilityOverrideDto { TimeZone = availability.TimeZone, Slots = o.Slots }).IsValid));
+            Assert.True(availability.Overrides.Count <= 2);
+        }
+    }
+
+    [Fact]
+    public async Task Adding_availability_only_fills_players_without_any_and_replace_makes_new_ones()
+    {
+        var tester = await _api.SignedInClientAsync("tester");
+        var teamId = await CreateFullTeamAsync(tester);
+        var before = StoredAvailability().ToDictionary(a => a.UserId, a => a.UpdatedAt);
+
+        var add = await tester.PostAsJsonAsync($"/api/master-tester/teams/{teamId}/availability", Add);
+        Assert.Contains("already has availability", (await add.Content.ReadFromJsonAsync<SeedResultDto>())!.Message);
+        Assert.Equal(before, StoredAvailability().ToDictionary(a => a.UserId, a => a.UpdatedAt));
+
+        // More made-up players join (up to the roster limit); Add gives only them availability.
+        (await tester.PostAsJsonAsync($"/api/master-tester/teams/{teamId}/roster", Add)).EnsureSuccessStatusCode();
+        var madeUp = (await tester.GetFromJsonAsync<List<TeamMemberDto>>($"/api/Teams/{teamId}/members"))!.Count(m => !m.IsOwner);
+        Assert.True(madeUp > before.Count);
+        (await tester.PostAsJsonAsync($"/api/master-tester/teams/{teamId}/availability", Add)).EnsureSuccessStatusCode();
+        var afterAdd = StoredAvailability();
+        Assert.Equal(madeUp, afterAdd.Count);
+        Assert.All(before, b => Assert.Equal(b.Value, afterAdd.Single(a => a.UserId == b.Key).UpdatedAt));
+
+        var replace = await tester.PostAsJsonAsync($"/api/master-tester/teams/{teamId}/availability", Replace);
+        Assert.Equal($"Made new availability for {madeUp} made-up players.", (await replace.Content.ReadFromJsonAsync<SeedResultDto>())!.Message);
+        Assert.Equal(madeUp, StoredAvailability().Count);
+    }
+
+    [Fact]
+    public async Task Availability_needs_made_up_players_on_the_team()
+    {
+        var tester = await _api.SignedInClientAsync("tester");
+        var created = await tester.PostAsJsonAsync("/api/Teams", new CreateTeamDto { Name = "Just Me" });
+        var teamId = (await created.Content.ReadFromJsonAsync<TeamDto>())!.Id;
+
+        var response = await tester.PostAsJsonAsync($"/api/master-tester/teams/{teamId}/availability", Add);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("no made-up players", (await response.Content.ReadFromJsonAsync<SeedResultDto>())!.Message);
+        Assert.Empty(StoredAvailability());
     }
 
     [Fact]

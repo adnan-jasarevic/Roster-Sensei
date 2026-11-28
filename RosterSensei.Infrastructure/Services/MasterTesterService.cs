@@ -116,12 +116,13 @@ public class MasterTesterService : IMasterTesterService
         await AddMatchesAsync(team.Id, timeZone, replace: false);
         await AddCalendarAsync(team.Id, userId, timeZone, replace: false);
         await AddOffDaysAsync(team.Id, userId, timeZone, replace: false);
+        await AddAvailabilityAsync(team.Id, timeZone, replace: false);
         await AddMapPoolAsync(team.Id, replace: false);
 
         return Result<SeedResultDto>.SuccessResult(new SeedResultDto
         {
             TeamId = team.Id,
-            Message = $"Created \"{team.Name}\" with a full roster, matches, calendar, off days and map pool."
+            Message = $"Created \"{team.Name}\" with a full roster, matches, calendar, off days, availability and map pool."
         });
     }
 
@@ -150,6 +151,9 @@ public class MasterTesterService : IMasterTesterService
                 break;
             case MasterTesterSections.OffDays:
                 message = await AddOffDaysAsync(teamId, userId, timeZone, replace);
+                break;
+            case MasterTesterSections.Availability:
+                message = await AddAvailabilityAsync(teamId, timeZone, replace);
                 break;
             case MasterTesterSections.MapPool:
                 message = await AddMapPoolAsync(teamId, replace);
@@ -371,6 +375,84 @@ public class MasterTesterService : IMasterTesterService
         return added.Count == 0
             ? "Every day is already off, so nothing was added."
             : $"{(replace ? "Replaced off days with" : "Marked")} {added.Count} off days: {string.Join(", ", added.Order().Select(d => d.ToString("MMM d")))}.";
+    }
+
+    // Availability belongs to a person, not a team, so this only ever touches the made-up players: the
+    // tester's own (and any other real member's) stays theirs to paint. The made-up players are shared
+    // by every test team, so Replace changes their times in all of them.
+    private async Task<string> AddAvailabilityAsync(int teamId, TimeZoneInfo timeZone, bool replace)
+    {
+        var memberIds = await _db.TeamMembers.Where(m => m.TeamId == teamId).Select(m => m.UserId).ToListAsync();
+        var seedIds = await _userManager.Users
+            .Where(u => memberIds.Contains(u.Id) && u.Email != null && u.Email.EndsWith("@" + SeedEmailDomain))
+            .Select(u => u.Id)
+            .ToListAsync();
+        if (seedIds.Count == 0)
+            return "The team has no made-up players. Add some with Roster first.";
+
+        var alreadyFilled = await _db.UserAvailabilities.Where(a => seedIds.Contains(a.UserId)).Select(a => a.UserId).ToListAsync();
+        var toFill = replace ? seedIds : seedIds.Except(alreadyFilled).ToList();
+        if (toFill.Count == 0)
+            return "Every made-up player on this team already has availability. Replace makes new ones.";
+
+        // Overrides go with their availability (cascade).
+        await _db.UserAvailabilities.Where(a => toFill.Contains(a.UserId)).ExecuteDeleteAsync();
+
+        var today = LocalToday(timeZone);
+        foreach (var userId in toFill)
+            _db.UserAvailabilities.Add(MadeUpAvailability(userId, timeZone.Id, today));
+        await _db.SaveChangesAsync();
+
+        return replace
+            ? $"Made new availability for {toFill.Count} made-up players."
+            : $"Gave {toFill.Count} made-up players a usual week and a few changed days.";
+    }
+
+    // Weekday evenings with each player's own start and end, the odd evening missing, some weekend
+    // afternoons, and 0 to 2 dates in the next two weeks that differ. With six players about two
+    // evenings in three reach a lineup of five, so the calendar shows both windows and near misses.
+    private UserAvailability MadeUpAvailability(string userId, string timeZoneId, DateOnly today)
+    {
+        static int Slot(int hour, int minute = 0) => (hour * 60 + minute) / AvailabilitySlots.SlotMinutes;
+        string Block(int from, int to) =>
+            string.Concat(Enumerable.Range(0, AvailabilitySlots.PerDay).Select(i => i >= from && i < to ? AvailabilitySlots.Free : AvailabilitySlots.Busy));
+
+        var eveningStart = Slot(18) + _random.Next(0, 4);   // 18:00 to 19:30
+        var eveningEnd = Slot(22) + _random.Next(0, 5);     // 22:00 to midnight
+        var week = new string[7];
+        for (var day = 0; day < 5; day++)
+        {
+            // Wednesday is the night people most often have something else on.
+            var plays = Chance(day == 2 ? 0.5 : 0.8);
+            week[day] = plays ? Block(eveningStart, eveningEnd) : AvailabilitySlots.EmptyDay;
+        }
+        // Everyone plays at least one weekday evening, or they'd look like they never filled anything in.
+        if (week.Take(5).All(d => d == AvailabilitySlots.EmptyDay))
+            week[_random.Next(0, 5)] = Block(eveningStart, eveningEnd);
+        week[5] = Chance(0.4) ? Block(Slot(13), Slot(18)) : AvailabilitySlots.EmptyDay;
+        week[6] = Chance(0.6) ? Block(Slot(15), Slot(21)) : AvailabilitySlots.EmptyDay;
+
+        var availability = new UserAvailability
+        {
+            UserId = userId,
+            TimeZone = timeZoneId,
+            WeeklySlots = string.Concat(week),
+            UpdatedAt = DateTime.UtcNow.AddDays(-_random.Next(0, 14))
+        };
+
+        var dates = Enumerable.Range(1, 14).OrderBy(_ => _random.Next()).Take(_random.Next(0, 3));
+        foreach (var offset in dates)
+        {
+            availability.Overrides.Add(new AvailabilityOverride
+            {
+                UserId = userId,
+                Date = today.AddDays(offset),
+                // Either can't make it at all, or free at different hours than usual.
+                Slots = Chance(0.5) ? AvailabilitySlots.EmptyDay : Block(Slot(16) + _random.Next(0, 4), Slot(21) + _random.Next(0, 6))
+            });
+        }
+
+        return availability;
     }
 
     private async Task<string> AddMapPoolAsync(int teamId, bool replace)

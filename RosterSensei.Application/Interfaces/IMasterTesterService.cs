@@ -25,7 +25,8 @@ public static class MasterTesterSections
     public const string Matches = "matches";
     public const string Calendar = "calendar";
     public const string OffDays = "offdays";
+    public const string Availability = "availability";
     public const string MapPool = "mappool";
 
-    public static readonly IReadOnlyList<string> All = [Roster, Matches, Calendar, OffDays, MapPool];
+    public static readonly IReadOnlyList<string> All = [Roster, Matches, Calendar, OffDays, Availability, MapPool];
 }

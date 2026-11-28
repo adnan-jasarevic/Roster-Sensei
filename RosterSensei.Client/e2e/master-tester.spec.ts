@@ -35,6 +35,24 @@ test.describe('Master tester panel', () => {
         await expect.poll(() => api.requestsTo('GET', /^\/Matches\/1$/).length).toBeGreaterThan(loadsBefore);
     });
 
+    test('lists Availability first on the Availability page and fills it', async ({ page, api }) => {
+        api.on('GET', /^\/master-tester$/, () => ({ json: { sections: ['roster', 'matches', 'calendar', 'offdays', 'availability', 'mappool'] } }));
+        api.on('POST', /^\/master-tester\/teams\/1\/availability$/, () => ({ json: { teamId: 1, message: 'Made new availability for 6 made-up players.' } }));
+        await api.install(page);
+        await page.goto('/availability');
+
+        await page.getByRole('button', { name: 'Tester' }).click();
+        const dialog = page.getByRole('dialog', { name: 'Master tester' });
+        await expect(dialog.getByRole('listitem').first()).toContainText('Availability');
+        await expect(dialog.getByRole('listitem').first()).toContainText('This tab');
+
+        await dialog.getByRole('button', { name: 'Replace availability' }).click();
+
+        await expect(page.getByText('Made new availability for 6 made-up players.')).toBeVisible();
+        const [request] = api.requestsTo('POST', /^\/master-tester\/teams\/1\/availability$/);
+        expect(request.body).toEqual({ mode: 'replace', timeZone: 'Europe/Sarajevo' });
+    });
+
     test('shows the error when generating fails', async ({ page, api }) => {
         api.on('GET', /^\/master-tester$/, () => ({ json: { sections: [] } }));
         api.fail('POST', /^\/master-tester\/teams\/1\/roster$/, 403, 'You are not in this team.');
