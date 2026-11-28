@@ -94,6 +94,12 @@ public sealed class TestDatabase : IDisposable
         return new TeamOffDayService(new TeamOffDayRepository(context), new TeamRepository(context));
     }
 
+    public AvailabilityService AvailabilityService()
+    {
+        var context = CreateContext();
+        return new AvailabilityService(new AvailabilityRepository(context), new TeamRepository(context), Time);
+    }
+
     public MapPoolService MapPoolService()
     {
         var context = CreateContext();

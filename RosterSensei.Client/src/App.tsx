@@ -13,6 +13,7 @@ import AppLayout from './components/app-layout';
 // Recharts and react-big-calendar are large, so these pages are only loaded when opened.
 const Statistics = lazy(() => import('./pages/statistics'));
 const CalendarPage = lazy(() => import('./pages/calendar'));
+const AvailabilityPage = lazy(() => import('./pages/availability'));
 
 // A live gallery of the design system. Vite strips it, and the page's code, from production builds.
 const UiKit = import.meta.env.DEV ? lazy(() => import('./pages/ui-kit')) : null;
@@ -40,6 +41,7 @@ function App() {
                     <Route path="/matches" element={<Matches />} />
                     <Route path="/map-pool" element={<MapPool />} />
                     <Route path="/calendar" element={<CalendarPage />} />
+                    <Route path="/availability" element={<AvailabilityPage />} />
                     <Route path="/statistics" element={<Statistics />} />
                     <Route path="/account" element={<Account />} />
 

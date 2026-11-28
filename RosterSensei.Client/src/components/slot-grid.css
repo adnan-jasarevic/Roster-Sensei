@@ -1,0 +1,161 @@
+/* The When2Play grid: a column per day, a row per half hour. Driven by the design tokens. */
+.rs-slot-grid {
+    display: grid;
+    min-width: 0;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Header and time labels stay in view while the half hours scroll under them. */
+.rs-slot-grid-corner,
+.rs-slot-grid-day {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--rs-surface);
+    border-bottom: 1px solid var(--rs-line);
+}
+
+.rs-slot-grid-day {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 2px 6px;
+    border-left: 1px solid var(--rs-line);
+    text-align: center;
+}
+
+.rs-slot-grid-day.is-disabled {
+    color: var(--rs-fg-subtle);
+}
+
+.rs-slot-grid-time {
+    position: relative;
+    padding-right: 8px;
+    color: var(--rs-fg-subtle);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+/* The hour label sits on the line it names, as in the calendar's time gutter. */
+.rs-slot-grid-time > span[aria-hidden] {
+    position: relative;
+    top: -0.5em;
+}
+
+/* 24px rows: the WCAG 2.2 AA minimum target, and 12 hours still fit in one tall screen. */
+.rs-slot {
+    position: relative;
+    height: 1.5rem;
+    min-width: 0;
+    border-left: 1px solid var(--rs-line);
+    border-top: 1px dashed color-mix(in srgb, var(--rs-line) 70%, transparent);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1.5rem;
+    padding-left: 4px;
+    transition: background-color 120ms ease-out;
+}
+
+.rs-slot.is-hour {
+    border-top-style: solid;
+    border-top-color: var(--rs-line);
+}
+
+.rs-slot:focus-visible {
+    z-index: 1;
+    outline: 2px solid var(--rs-focus);
+    outline-offset: -2px;
+}
+
+/* Painting: the cells are drawn on directly, so a touch paints instead of scrolling. The time column
+   still scrolls the grid on a phone. */
+.rs-slot-grid.is-paintable .rs-slot:not(.is-disabled) {
+    cursor: cell;
+    touch-action: none;
+}
+
+.rs-slot-grid.is-paintable .rs-slot:not(.is-disabled):hover {
+    background-color: var(--rs-hover);
+}
+
+.rs-slot-grid.is-dragging .rs-slot {
+    transition: none;
+}
+
+.rs-slot.is-free,
+.rs-slot-grid.is-paintable .rs-slot.is-free:not(.is-disabled):hover {
+    background-color: var(--rs-free);
+}
+
+/* Inside a filled block the half-hour lines fade, so a stretch of time reads as one block; hour lines
+   stay faintly visible for reading times off it. */
+.rs-slot.is-free.joins-above,
+.rs-slot.is-lineup.joins-above,
+.rs-slot.joins-above[class*='heat-'] {
+    border-top-color: transparent;
+}
+
+.rs-slot.is-free.joins-above.is-hour,
+.rs-slot.is-lineup.joins-above.is-hour {
+    border-top-color: color-mix(in srgb, var(--rs-on-free) 16%, transparent);
+}
+
+.rs-slot.joins-above.is-hour[class*='heat-'] {
+    border-top-color: color-mix(in srgb, var(--rs-fg) 10%, transparent);
+}
+
+/* Days in the past: hatched like an off day, and not paintable. */
+.rs-slot.is-disabled {
+    background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--rs-line) 6px 7px);
+    cursor: not-allowed;
+}
+
+.rs-slot.is-disabled.is-free {
+    background-color: color-mix(in srgb, var(--rs-free) 45%, var(--rs-surface));
+}
+
+/* The team heatmap: ink for "some are free", green once a lineup is. */
+.rs-slot.heat-1 { background-color: color-mix(in srgb, var(--rs-chart-series) 9%, transparent); }
+.rs-slot.heat-2 { background-color: color-mix(in srgb, var(--rs-chart-series) 18%, transparent); }
+.rs-slot.heat-3 { background-color: color-mix(in srgb, var(--rs-chart-series) 30%, transparent); }
+.rs-slot.heat-4 { background-color: color-mix(in srgb, var(--rs-chart-series) 44%, transparent); }
+
+.rs-slot.heat-1,
+.rs-slot.heat-2 { color: var(--rs-fg-muted); }
+.rs-slot.heat-3,
+.rs-slot.heat-4 { color: var(--rs-fg); }
+
+.rs-slot.is-lineup {
+    background-color: var(--rs-free);
+    color: var(--rs-on-free);
+}
+
+/* Legend swatches use the same fills as the cells. */
+.rs-heat-swatch {
+    display: inline-block;
+    width: 1rem;
+    height: 0.75rem;
+    border-radius: 2px;
+    border: 1px solid var(--rs-line);
+}
+.rs-heat-swatch.heat-1 { background: color-mix(in srgb, var(--rs-chart-series) 9%, var(--rs-surface)); }
+.rs-heat-swatch.heat-2 { background: color-mix(in srgb, var(--rs-chart-series) 18%, var(--rs-surface)); }
+.rs-heat-swatch.heat-3 { background: color-mix(in srgb, var(--rs-chart-series) 30%, var(--rs-surface)); }
+.rs-heat-swatch.heat-4 { background: color-mix(in srgb, var(--rs-chart-series) 44%, var(--rs-surface)); }
+.rs-heat-swatch.is-lineup,
+.rs-heat-swatch.is-free { background: var(--rs-free); border-color: var(--rs-free); }
+
+@media (prefers-reduced-motion: reduce) {
+    .rs-slot { transition: none; }
+}
+
+/* The heatmap: the cell under the pointer is the one the details panel describes. */
+.rs-slot-grid:not(.is-paintable) .rs-slot:hover {
+    z-index: 1;
+    box-shadow: inset 0 0 0 2px var(--rs-fg-muted);
+}

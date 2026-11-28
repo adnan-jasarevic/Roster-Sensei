@@ -155,6 +155,37 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("RosterSensei.Domain.Entities.AvailabilityOverride", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Slots")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .IsUnicode(false)
+                        .HasColumnType("char(48)")
+                        .IsFixedLength();
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("AvailabilityOverrides");
+                });
+
             modelBuilder.Entity("RosterSensei.Domain.Entities.DemoParserStatus", b =>
                 {
                     b.Property<string>("ParserVersion")
@@ -725,6 +756,33 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.ToTable("TeamOffDays");
                 });
 
+            modelBuilder.Entity("RosterSensei.Domain.Entities.UserAvailability", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("WeeklySlots")
+                        .IsRequired()
+                        .HasMaxLength(336)
+                        .IsUnicode(false)
+                        .HasColumnType("char(336)")
+                        .IsFixedLength();
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("UserAvailabilities");
+                });
+
             modelBuilder.Entity("RosterSensei.Infrastructure.Identity.AppUser", b =>
                 {
                     b.Property<string>("Id")
@@ -900,6 +958,17 @@ namespace RosterSensei.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("RosterSensei.Domain.Entities.AvailabilityOverride", b =>
+                {
+                    b.HasOne("RosterSensei.Domain.Entities.UserAvailability", "Availability")
+                        .WithMany("Overrides")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Availability");
+                });
+
             modelBuilder.Entity("RosterSensei.Domain.Entities.DemoPlayerStats", b =>
                 {
                     b.HasOne("RosterSensei.Domain.Entities.MatchDemoImport", "MatchDemoImport")
@@ -1060,6 +1129,15 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.Navigation("Team");
                 });
 
+            modelBuilder.Entity("RosterSensei.Domain.Entities.UserAvailability", b =>
+                {
+                    b.HasOne("RosterSensei.Infrastructure.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("RosterSensei.Infrastructure.Persistence.SteamSignInState", b =>
                 {
                     b.HasOne("RosterSensei.Infrastructure.Identity.AppUser", null)
@@ -1094,6 +1172,11 @@ namespace RosterSensei.Infrastructure.Migrations
                     b.Navigation("Matches");
 
                     b.Navigation("Members");
+                });
+
+            modelBuilder.Entity("RosterSensei.Domain.Entities.UserAvailability", b =>
+                {
+                    b.Navigation("Overrides");
                 });
 
             modelBuilder.Entity("RosterSensei.Infrastructure.Identity.AppUser", b =>

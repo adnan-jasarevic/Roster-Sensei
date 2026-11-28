@@ -1,5 +1,5 @@
 import type { Page, Request, Route } from '@playwright/test';
-import type { LineupEntry, LineupPlayer, MapPool, MapRating, MapSide, Match, SteamAccount, Team, TeamDashboardData, TeamEvent, TeamEventType, TeamInvite, TeamMember, TeamOffDay, TeamStats } from '../../src/types';
+import type { LineupEntry, LineupPlayer, MapPool, MapRating, MapSide, Match, MyAvailability, SteamAccount, Team, TeamAvailability, TeamDashboardData, TeamEvent, TeamEventType, TeamInvite, TeamMember, TeamOffDay, TeamStats } from '../../src/types';
 
 type Role = 'Captain' | 'Officer' | 'Player' | 'Coach';
 
@@ -15,6 +15,23 @@ export interface MockTeam {
     eventTypes: TeamEventType[];
     offDays: TeamOffDay[];
     mapRatings: MapRating[];
+    /** Who is free when (UTC half hours), as GET /teams/{id}/availability returns it. */
+    availability: TeamAvailability['slots'];
+}
+
+/** A day of availability free from start to end ("HH:mm", local to whoever saved it). */
+export function freeDay(start: string, end: string) {
+    const slot = (time: string) => { const [h, m] = time.split(':').map(Number); return h * 2 + (m >= 30 ? 1 : 0); };
+    return Array.from({ length: 48 }, (_, i) => (i >= slot(start) && i < slot(end) ? '1' : '0')).join('');
+}
+
+/** Every half hour from start (inclusive) to end (exclusive), with these people free. */
+export function freeSlots(start: string, end: string, userIds: string[]): TeamAvailability['slots'] {
+    const slots: TeamAvailability['slots'] = [];
+    for (let t = new Date(start).getTime(); t < new Date(end).getTime(); t += 30 * 60 * 1000) {
+        slots.push({ start: new Date(t).toISOString(), userIds });
+    }
+    return slots;
 }
 
 /** Rating and scoreboard stats as the API returns them: null when not sent. */
@@ -96,6 +113,7 @@ export function team(id: number, name: string, role: Role = 'Captain', isOwner =
         eventTypes: defaultEventTypes(),
         offDays: [],
         mapRatings: [],
+        availability: [],
         ...extra,
     };
 }
@@ -133,6 +151,8 @@ export class MockApi {
     steamProfile: { personaName: string; avatarUrl: string | null } | null = null;
     /** The SteamID64 the next Steam sign-in proves, as Steam's own check would. */
     steamSignInAs = '76561198012345678';
+    /** The signed-in user's own availability. */
+    myAvailability: MyAvailability = { timeZone: null, weekly: Array.from({ length: 7 }, () => '0'.repeat(48)), overrides: [] };
     readonly requests: RecordedRequest[] = [];
     private readonly overrides: { method: string; pattern: RegExp; handler: Handler }[] = [];
     private nextId = 1000;
@@ -519,6 +539,49 @@ export class MockApi {
                 t.offDays = t.offDays.filter(d => d.date !== date);
                 return { json: { message: 'The day is no longer an off day.' } };
             }
+        }
+
+        if (path === '/availability' && method === 'GET') return { json: this.myAvailability };
+
+        if (path === '/availability/weekly' && method === 'PUT') {
+            this.myAvailability = { ...this.myAvailability, timeZone: body?.timeZone, weekly: body?.weekly };
+            return { json: this.myAvailability };
+        }
+
+        if ((m = path.match(/^\/availability\/days\/(\d{4}-\d{2}-\d{2})$/i))) {
+            const date = m[1];
+            const others = this.myAvailability.overrides.filter(o => o.date !== date);
+            if (method === 'PUT') {
+                this.myAvailability = { ...this.myAvailability, timeZone: this.myAvailability.timeZone ?? body?.timeZone, overrides: [...others, { date, slots: body?.slots }] };
+                return { json: { date, slots: body?.slots } };
+            }
+            if (method === 'DELETE') {
+                if (others.length === this.myAvailability.overrides.length) return { status: 404, json: { message: 'That day already follows your usual week.' } };
+                this.myAvailability = { ...this.myAvailability, overrides: others };
+                return { json: { message: 'The day follows your usual week again.' } };
+            }
+        }
+
+        if ((m = path.match(/^\/teams\/(\d+)\/availability$/i)) && method === 'GET') {
+            const t = this.findTeam(m[1]);
+            if (!t) return { status: 404, json: { message: 'Team not found.' } };
+            const from = new Date(url.searchParams.get('from') ?? 0).getTime();
+            const to = new Date(url.searchParams.get('to') ?? 0).getTime();
+            const slots = t.availability.filter(s => new Date(s.start).getTime() >= from && new Date(s.start).getTime() < to);
+            const meFilledIn = this.myAvailability.weekly.some(d => d.includes('1')) || this.myAvailability.overrides.some(o => o.slots.includes('1'));
+            const result: TeamAvailability = {
+                slotMinutes: 30,
+                playersNeeded: 5,
+                members: t.members.map(mb => ({
+                    userId: mb.id,
+                    username: mb.username,
+                    role: mb.role,
+                    countsTowardsLineup: mb.role !== 'Coach',
+                    hasFilledIn: mb.id === ME.id ? meFilledIn : t.availability.some(s => s.userIds.includes(mb.id)),
+                })),
+                slots,
+            };
+            return { json: result };
         }
 
         return { status: 404, json: { message: `No mock for ${method} ${path}` } };

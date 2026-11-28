@@ -330,3 +330,51 @@
 .team-calendar .rbc-event.is-saving {
     opacity: 0.6;
 }
+
+/* Free time: a lineup's worth of players is free. A soft green band behind the events in week and day
+   views, a green tag on the day in month view. Clicks pass through the band to the time slots. */
+.team-calendar .rbc-day-slot .rbc-background-event.is-lineup-window {
+    padding: 2px 4px;
+    border: 1px solid var(--rs-free-line);
+    border-radius: 4px;
+    background: var(--rs-free-soft);
+    opacity: 1;
+    pointer-events: none;
+}
+
+.team-calendar .rs-lineup-label {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--rs-success-text);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+}
+
+.team-calendar .rs-lineup-tag {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 2px;
+    border-radius: 3px;
+    padding: 0 4px;
+    background: var(--rs-free-soft);
+    color: var(--rs-success-text);
+    font-size: 0.625rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+.team-calendar button.rs-lineup-tag:hover {
+    background: var(--rs-free-line);
+    color: var(--rs-fg);
+}
+
+.rs-lineup-swatch {
+    background: var(--rs-free-soft);
+    border: 1px solid var(--rs-free-line);
+    color: var(--rs-success-text);
+}

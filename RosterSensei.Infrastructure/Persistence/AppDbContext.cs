@@ -23,6 +23,8 @@ public class AppDbContext : IdentityDbContext<AppUser>
     public DbSet<TeamOffDay> TeamOffDays { get; set; }
     public DbSet<MapRating> MapRatings { get; set; }
     public DbSet<SteamSignInState> SteamSignInStates { get; set; }
+    public DbSet<UserAvailability> UserAvailabilities { get; set; }
+    public DbSet<AvailabilityOverride> AvailabilityOverrides { get; set; }
 
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -231,6 +233,49 @@ public class AppDbContext : IdentityDbContext<AppUser>
                 .HasMaxLength(450);
 
             day.HasIndex(d => new { d.TeamId, d.Date })
+                .IsUnique();
+        });
+
+        // Belongs to the user, so deleting the account takes it with them. Teams read it through their members.
+        builder.Entity<UserAvailability>(availability =>
+        {
+            availability.HasKey(a => a.UserId);
+            availability.Property(a => a.UserId).HasMaxLength(450);
+
+            availability.HasOne<AppUser>()
+                .WithMany()
+                .HasForeignKey(a => a.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            availability.Property(a => a.TimeZone)
+                .IsRequired()
+                .HasMaxLength(AvailabilitySlots.MaxTimeZoneLength)
+                .IsUnicode(false);
+
+            availability.Property(a => a.WeeklySlots)
+                .IsRequired()
+                .HasMaxLength(AvailabilitySlots.PerWeek)
+                .IsUnicode(false)
+                .IsFixedLength();
+        });
+
+        builder.Entity<AvailabilityOverride>(day =>
+        {
+            day.HasOne(o => o.Availability)
+                .WithMany(a => a.Overrides)
+                .HasForeignKey(o => o.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            day.Property(o => o.UserId).HasMaxLength(450);
+
+            day.Property(o => o.Slots)
+                .IsRequired()
+                .HasMaxLength(AvailabilitySlots.PerDay)
+                .IsUnicode(false)
+                .IsFixedLength();
+
+            // One override per user and date, even when two saves of the same date arrive at once.
+            day.HasIndex(o => new { o.UserId, o.Date })
                 .IsUnique();
         });
 

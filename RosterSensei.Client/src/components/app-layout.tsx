@@ -1,7 +1,7 @@
 ﻿import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CalendarDays, ChartNoAxesCombined, LayoutDashboard, LogOut, Map as MapIcon, Swords, UserRound, Users, type LucideIcon } from 'lucide-react';
+import { CalendarClock, CalendarDays, ChartNoAxesCombined, LayoutDashboard, LogOut, Map as MapIcon, Swords, UserRound, Users, type LucideIcon } from 'lucide-react';
 import api from '../services/api';
 import { signOut } from '../services/session';
 import { useResource } from '../hooks/use-resource';
@@ -13,10 +13,12 @@ import TopNavigation from './top-navigation';
 import { PageSkeleton } from './page-skeletons';
 import MasterTesterPanel from './master-tester-panel';
 
-const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
-    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+// `shortLabel` is for the bottom tabs on phones and tablets: seven tabs leave each about 47px on a 360px phone.
+const NAV_ITEMS: { to: string; label: string; shortLabel?: string; icon: LucideIcon }[] = [
+    { to: '/dashboard', label: 'Dashboard', shortLabel: 'Home', icon: LayoutDashboard },
     { to: '/team', label: 'Team', icon: Users },
     { to: '/calendar', label: 'Calendar', icon: CalendarDays },
+    { to: '/availability', label: 'Availability (When2Play)', shortLabel: 'Avail.', icon: CalendarClock },
     { to: '/matches', label: 'Matches', icon: Swords },
     { to: '/map-pool', label: 'Map Pool', icon: MapIcon },
     { to: '/statistics', label: 'Statistics', icon: ChartNoAxesCombined },
@@ -144,12 +146,12 @@ export default function AppLayout() {
                 {/* Bottom tabs on phones and tablets: every destination in reach of a thumb. */}
                 <nav aria-label="Main" className="flex shrink-0 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden">
                     {NAV_ITEMS.map(item => (
-                        <NavLink key={item.to} to={item.to} className={({ isActive }) => cx('relative flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[0.6875rem] font-semibold', isActive ? 'text-fg' : 'text-fg-muted')}>
+                        <NavLink key={item.to} to={item.to} className={({ isActive }) => cx('relative flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[0.625rem] font-semibold', isActive ? 'text-fg' : 'text-fg-muted')}>
                             {({ isActive }) => (
                                 <>
                                     {isActive && <motion.span layoutId="nav-bottom-active" className="absolute inset-x-3 top-0 h-0.5 rounded-b bg-accent" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
                                     <item.icon className={cx('size-5', isActive && 'text-accent-text')} aria-hidden="true" />
-                                    <span className="max-w-full truncate px-0.5">{item.label}</span>
+                                    <span className="max-w-full truncate px-0.5">{item.shortLabel ?? item.label}</span>
                                 </>
                             )}
                         </NavLink>
